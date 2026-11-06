@@ -556,6 +556,7 @@ function interceptFromClient(message) {
     const gone = message.params?.sessionId;
     if (gone && rawConfigOptions.delete(gone)) log(`forgot session ${gone}`);
     if (gone) publishedSets.delete(gone);
+    if (gone) TURN_TIMES?.forget(gone);
     if (gone) promptCacheTurns.delete(gone);
     if (gone) sessionAgents.delete(gone);
   }

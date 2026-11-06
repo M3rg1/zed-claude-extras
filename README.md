@@ -126,8 +126,19 @@ reply copies them too. The end line says `Stopped` for a cancelled turn, `Failed
 an error, and `Ended (<reason>)` for any other stop reason. Display only: Claude never
 sees them.
 
+A turn that ends with a background command still running ends `Sleeping` instead of
+`Done`, since the command's exit wakes Claude:
+
+```
+Sleeping 23:47 · 7s · 1 background command running
+```
+
+A command counts from the call whose input says `run_in_background` until its exit, an
+update with `terminal_exit`. Monitors and scheduled wake-ups aren't counted. A
+background subagent needs nothing: Claude Code holds the turn open until it hands back.
+
 A turn Claude starts itself, e.g. when a background task wakes it, starts with `Woke`
-instead, at its first output, and ends with `Done` at its result: the one
+instead, at its first output, and ends with `Done` or `Sleeping` at its result: the one
 `usage_update` of a turn with a `cost`. A reopened thread's earlier turns have none.
 `ZED_AGENT_USAGE_TURN_TIMES=off` removes them.
 

@@ -136,12 +136,27 @@ process.stdin.on("data", (chunk) => {
         status: "completed",
         ...fromSubagent,
       });
+      // A command sent to the background: its call completes as it starts.
+      const background = { toolCallId: `bg_${turn}`, title: "sleep 20", kind: "execute" };
+      if (process.env.ZED_AGENT_USAGE_FAKE_WAKE === "1") {
+        toolUpdate({ ...background, sessionUpdate: "tool_call", status: "pending", rawInput: {} });
+        toolUpdate({
+          ...background,
+          sessionUpdate: "tool_call_update",
+          rawInput: { command: "sleep 20", run_in_background: true },
+        });
+        toolUpdate({ sessionUpdate: "tool_call_update", toolCallId: background.toolCallId, status: "completed" });
+      }
       send({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
-      // A turn Claude starts itself once a background command finishes: the command's
+      // A turn Claude starts itself once the background command finishes: the command's
       // own call reports its exit, then the reply, then the result with its cost.
       if (process.env.ZED_AGENT_USAGE_FAKE_WAKE === "1") {
         setTimeout(() => {
-          finish(1, "completed");
+          toolUpdate({
+            sessionUpdate: "tool_call_update",
+            toolCallId: background.toolCallId,
+            _meta: { terminal_exit: { terminal_id: background.toolCallId, exit_code: 0, signal: null } },
+          });
           toolUpdate({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "woke" } });
           toolUpdate({ sessionUpdate: "usage_update", used: 2, size: 3, cost: { amount: 0.01, currency: "USD" } });
         }, 100);

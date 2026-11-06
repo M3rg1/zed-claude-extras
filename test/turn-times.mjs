@@ -84,6 +84,48 @@ busy.start(3, "s3", T0);
 assert.equal(lineOf(busy.end({ id: 3, result: { stopReason: "end_turn" } }, T0)), "*Done 23:41 · 0s*");
 assert.equal(busy.turnResult("s3", result, T0), null, "your message takes over a turn Claude started itself");
 
+// A turn that ends with a background command still running ends asleep: the command's
+// exit wakes Claude. Its input says run_in_background, its call completes as it starts,
+// and its exit comes as an update with `terminal_exit`.
+const bg = new TurnTimes(clock);
+const background = (id, more = {}) => ({
+  sessionUpdate: "tool_call_update",
+  toolCallId: id,
+  rawInput: { command: "sleep 20", run_in_background: true },
+  ...more,
+});
+const exit = (id) => ({ sessionUpdate: "tool_call_update", toolCallId: id, _meta: { terminal_exit: { exit_code: 0 } } });
+bg.start(20, "s1", T0);
+bg.observe("s1", { sessionUpdate: "tool_call", toolCallId: "bg1", kind: "execute", rawInput: {} }, T0);
+bg.observe("s1", background("bg1"), T0);
+bg.observe("s1", background("bg1", { status: "completed" }), T0);
+bg.observe("s1", { sessionUpdate: "tool_call_update", toolCallId: "fg", rawInput: { command: "ls" } }, T0);
+assert.equal(lineOf(bg.end({ id: 20, result: { stopReason: "end_turn" } }, T0 + 7_000)),
+  "*Sleeping 23:41 · 7s · 1 background command running*", "asleep, not done");
+bg.observe("s1", exit("bg1"), T0);
+bg.observe("s1", chunk("woke"), T0);
+assert.equal(lineOf(bg.turnResult("s1", result, T0)), "*Done 23:41 · 0s*", "done once nothing runs");
+
+bg.start(21, "s1", T0);
+bg.observe("s1", background("bg2"), T0);
+bg.observe("s1", background("bg3"), T0);
+bg.observe("s1", background("bg4", { status: "failed" }), T0);
+bg.observe("s1", { ...background("sub"), _meta: { claudeCode: { parentToolUseId: "toolu_1" } } }, T0);
+assert.equal(lineOf(bg.end({ id: 21, result: { stopReason: "end_turn" } }, T0)),
+  "*Sleeping 23:41 · 0s · 2 background commands running*", "a failed one and a subagent's don't count");
+bg.observe("s1", exit("bg2"), T0);
+bg.observe("s1", background("bg2"), T0);
+bg.observe("s1", chunk("woke"), T0);
+assert.equal(lineOf(bg.turnResult("s1", result, T0)), "*Sleeping 23:41 · 0s · 1 background command running*",
+  "an exited command stays exited, and a turn Claude started itself can end asleep too");
+bg.start(22, "s1", T0);
+assert.equal(lineOf(bg.end({ id: 22, result: { stopReason: "cancelled" } }, T0)),
+  "*Stopped 23:41 · 0s · 1 background command running*", "a turn that didn't end normally keeps its word");
+bg.forget("s1");
+bg.start(23, "s1", T0);
+assert.equal(lineOf(bg.end({ id: 23, result: { stopReason: "end_turn" } }, T0)), "*Done 23:41 · 0s*",
+  "a closed thread's commands are forgotten");
+
 // ---------------------------------------------------------------- through the proxy
 
 /** Sends one prompt through the proxy, and resolves to the cards and the text Zed got,
@@ -163,6 +205,8 @@ assert.equal(timeLines(shown).length, 2, "two lines a turn");
 // After the response, a background command wakes Claude: the command's exit, then the
 // reply, with a line at each end.
 const woken = await runTurn({ ZED_AGENT_USAGE_FAKE_WAKE: "1" }, 500);
+const ended = woken.slice(0, woken.indexOf("response")).filter((x) => x.text !== undefined).at(-1);
+assert.match(ended.text, /\*Sleeping \d.* · 1 background command running\*/, "the turn ends asleep");
 const after = woken.slice(woken.indexOf("response") + 1).filter((x) => x.text !== undefined);
 assert.deepEqual(after.map(blank), ["\n\n*Woke …*\n\n", "woke", "\n\n*Done …*\n\n"], "Claude's own turn");
 assert.match(after[2].text, / · \ds\*\n\n$/, "with how long it took");

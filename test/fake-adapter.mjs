@@ -30,6 +30,8 @@ process.stdin.on("data", (chunk) => {
     // Tool calls shaped like the real Claude adapter's: the shell command is the
     // title, and later reports repeat the title and the kind.
     if (msg.method === "session/prompt") {
+      // Never answering is a turn that is still running.
+      if (process.env.ZED_AGENT_USAGE_FAKE_HOLD_PROMPT === "1") continue;
       const sessionId = msg.params.sessionId;
       const command = `echo ${"long ".repeat(40)}`;
       const toolUpdate = (update) =>

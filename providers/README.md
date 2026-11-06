@@ -48,6 +48,7 @@ node test/real.mjs myagent      # handshake against the real adapter
 | `resolveAdapter()` | `{command, args}`, absolute `command`; `resolveNode()` gives you one |
 | `fetchUsage()` | Resolves to `{available, planType, windows}` |
 | `windows[]` | `{label, usedPercent, resetsAt}`; `label` is short (`5h`, `wk`) |
+| `agentLogDir(sessionId)` | Optional. The folder of a session's subagent logs, or null; without it there is no agent map |
 
 `windows` is an ordered list of any length, so an agent with one window, or
 three, needs no special casing — order it shortest-first. Return

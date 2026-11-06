@@ -10,17 +10,22 @@
  */
 
 import { spawn } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { loadProvider } from "./providers/index.mjs";
 import {
   acquireFetchLock,
+  cacheDir,
   readCache,
   readSessionActivity,
   waitForCache,
   writeCache,
   writeSessionActivity,
 } from "./lib/cache.mjs";
+import { AgentLogReader, agentForValue, agentLogMarkdown, agentMapOption } from "./lib/agent-map.mjs";
 import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
 import { cacheLabel, cacheTtlMs } from "./lib/prompt-cache.mjs";
+import { zedCli } from "./lib/resolve.mjs";
 import {
   clampPercent,
   describeWindows,
@@ -86,6 +91,10 @@ const MARKER_AT = clampPercent(process.env.ZED_AGENT_USAGE_MARKER_AT, 90);
 const PROMPT_CACHE_TTL_MS = off(process.env.ZED_AGENT_USAGE_PROMPT_CACHE ?? "on")
   ? null
   : cacheTtlMs(process.env);
+/** How often the agent map looks for new subagents while a thread is in use. It only
+ *  stats logs that haven't changed, but Zed rebuilds the row each time one has. */
+const AGENT_MAP_MS = Number(process.env.ZED_AGENT_USAGE_AGENT_MAP_MS ?? 15_000);
+const SHOW_AGENT_MAP = !off(process.env.ZED_AGENT_USAGE_AGENT_MAP ?? "on");
 const COMMAND_MAX = resolveCommandMax(process.env.ZED_AGENT_USAGE_COMMAND_MAX);
 const COMMAND_SUMMARY = off(process.env.ZED_AGENT_USAGE_COMMAND_SUMMARY ?? "on")
   ? null
@@ -111,9 +120,10 @@ log(`provider: ${provider.id}, marker ${MARKER || "off"} above ${MARKER_AT}%`);
  *  option a real adapter grows later. */
 const USAGE_OPTION_ID = "_usage";
 const LAST_ACTIVITY_OPTION_ID = "_lastActivity";
+const AGENT_MAP_OPTION_ID = "_agentMap";
 const OWN_VALUE_ID = "current";
-/** Both injected ids, so a set-request for either can be answered here. */
-const OWN_OPTION_IDS = new Set([USAGE_OPTION_ID, LAST_ACTIVITY_OPTION_ID]);
+/** Every injected id, so a set-request for any of them can be answered here. */
+const OWN_OPTION_IDS = new Set([USAGE_OPTION_ID, LAST_ACTIVITY_OPTION_ID, AGENT_MAP_OPTION_ID]);
 
 /** Shows when a thread was last worked in. Zed renders `updatedAt` as "9m",
  *  which is no help on returning to a thread days later, and the format is not
@@ -184,6 +194,10 @@ const turnRequests = new Map();
 const promptCacheTurns = new Map();
 /** Request id -> sessionId, for the prompts still running. */
 const promptRequests = new Map();
+/** sessionId -> its subagents, for the agent map. */
+const sessionAgents = new Map();
+const agentLogReader = new AgentLogReader();
+let readingAgents = false;
 
 function suffix() {
   return usage?.available ? formatWindows(usage.windows) : "";
@@ -267,7 +281,11 @@ function lastActivityOption(sessionId) {
 function withOwnOptions(configOptions, sessionId) {
   if (!Array.isArray(configOptions)) return configOptions;
   const kept = HIDDEN.size ? configOptions.filter((opt) => !HIDDEN.has(opt?.id)) : configOptions;
-  const mine = [usageOption(sessionId), lastActivityOption(sessionId)].filter(Boolean);
+  const mine = [
+    usageOption(sessionId),
+    lastActivityOption(sessionId),
+    agentMapOption(sessionAgents.get(sessionId)),
+  ].filter(Boolean);
   return mine.length ? [...kept, ...mine] : kept;
 }
 
@@ -312,6 +330,48 @@ function renderSelectors() {
   if (next === lastSuffix) return;
   lastSuffix = next;
   republishConfigOptions();
+}
+
+/** Re-reads each open thread's subagent logs, telling Zed only if a row changed. */
+async function refreshAgentMaps() {
+  if (!SHOW_AGENT_MAP || !provider.agentLogDir || readingAgents) return;
+  readingAgents = true;
+  try {
+    let changed = false;
+    for (const sessionId of rawConfigOptions.keys()) {
+      const dir = provider.agentLogDir(sessionId);
+      const agents = dir ? await agentLogReader.read(dir, Date.now()) : [];
+      const before = JSON.stringify(agentMapOption(sessionAgents.get(sessionId)));
+      sessionAgents.set(sessionId, agents);
+      changed ||= before !== JSON.stringify(agentMapOption(agents));
+    }
+    if (changed) republishConfigOptions();
+  } catch (err) {
+    log(`reading subagent logs failed: ${err?.message || err}`);
+  } finally {
+    readingAgents = false;
+  }
+}
+
+/** Opens a readable copy of a subagent's log in Zed. A value that names no agent of
+ *  this thread does nothing, as Zed may replay a saved value when a thread starts. */
+async function openAgentLog(sessionId, value) {
+  const agent = agentForValue(sessionAgents.get(sessionId), value);
+  if (!agent) return;
+  try {
+    const file = path.join(cacheDir(), `agent-${agent.id}.md`);
+    await writeFile(file, agentLogMarkdown(agent, await readFile(agent.logPath, "utf8")), { mode: 0o600 });
+    const { command, args } = zedCli();
+    const zed = spawn(command, [...args, "--existing", file], {
+      stdio: "ignore",
+      detached: true,
+      windowsHide: true,
+    });
+    zed.on("error", (err) => log(`opening a subagent log failed: ${err.message}`));
+    zed.unref();
+  } catch (err) {
+    log(`opening a subagent log failed: ${err?.message || err}`);
+  }
 }
 
 /** A rolled-over window leaves a stale percentage cached, so re-read just after
@@ -425,6 +485,7 @@ function transform(message) {
     log(`config options: ${configOptions.map((o) => o?.id).join(", ")}`);
     // Startup fetch failed or has not landed: retry so the label arrives now.
     if (!usage) void refreshUsage({ reason: "session start" });
+    void refreshAgentMaps();
     return {
       ...message,
       result: { ...message.result, configOptions: withOwnOptions(configOptions, sessionId) },
@@ -503,6 +564,7 @@ function interceptFromClient(message) {
     if (gone && rawConfigOptions.delete(gone)) log(`forgot session ${gone}`);
     if (gone) sessionActivity.delete(gone);
     if (gone) promptCacheTurns.delete(gone);
+    if (gone) sessionAgents.delete(gone);
   }
 
   if (message?.method !== "session/set_config_option") return false;
@@ -515,6 +577,11 @@ function interceptFromClient(message) {
       id: message.id,
       result: { configOptions: withOwnOptions(rawConfigOptions.get(sessionId) ?? [], sessionId) },
     });
+  }
+  if (message.params.configId === AGENT_MAP_OPTION_ID) {
+    void openAgentLog(sessionId, message.params.value);
+    // Zed may already show the clicked row as selected; this puts the summary back.
+    republishConfigOptions();
   }
   return true;
 }
@@ -585,5 +652,10 @@ setInterval(
   },
   Math.max(2_000, Math.min(60_000, MAX_AGE_MS)),
 ).unref();
+// Subagents work during a turn, however long it has run, so a running turn isn't idle.
+setInterval(() => {
+  if (promptRequests.size === 0 && Date.now() - lastTurnAt > IDLE_AFTER_MS) return;
+  void refreshAgentMaps();
+}, AGENT_MAP_MS).unref();
 // Re-render between fetches so the countdown stays honest without a turn.
 setInterval(renderSelectors, RENDER_MS).unref();

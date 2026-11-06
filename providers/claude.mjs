@@ -2,7 +2,9 @@
  *  the data behind `/usage`. The SDK authenticates itself and no model call is
  *  made, so no credentials are handled and no quota is used. */
 
-import { firstExisting, resolveNodeAdapter, zedPaths } from "../lib/resolve.mjs";
+import { homedir } from "node:os";
+import path from "node:path";
+import { expandPaths, firstExisting, resolveNodeAdapter, zedPaths } from "../lib/resolve.mjs";
 
 const ADAPTER_REL =
   "external_agents/registry/npx/claude-acp/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js";
@@ -38,6 +40,14 @@ export default {
       relative: ADAPTER_REL,
       npmPackage: "@agentclientprotocol/claude-agent-acp",
     });
+  },
+
+  /** Claude Code files a session under a folder named after its project. Searching
+   *  by session id saves copying how it encodes paths, and finds a session started
+   *  in a worktree too. */
+  agentLogDir(sessionId) {
+    const config = process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), ".claude");
+    return firstExisting(expandPaths(path.join(config, "projects"), ["*", sessionId, "subagents"]));
   },
 
   async fetchUsage({ cwd = process.cwd(), timeoutMs = 20_000 } = {}) {

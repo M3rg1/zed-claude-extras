@@ -178,6 +178,27 @@ set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL` says otherwise. It doesn't read the
 `promptCacheTtl` setting, notice compaction or see the cache dropped early, and it
 covers the main conversation only, not subagents.
 
+## Agent map
+
+Once a thread has spawned Claude subagents, the row gains an item such as
+`5 agents · 1 running`. Click it for a list, running ones first and then newest first:
+
+```
+● Implement Task 6 · 15m 6s · 225.2k
+○ Re-review round 1 · 3m 24s · 132.4k
+○ Fix round 1 · 4m 2s · 297.7k
+```
+
+`●` is running, `○` is done, and `◌` means an unfinished subagent's log hasn't moved
+for over 30 minutes, so it was interrupted or is waiting on something long. Each row
+has its time so far and the size of its last reply. Hover for the full title and
+type; pick one to open a readable copy of its log in Zed, with long tool results cut.
+That copy goes in the temp folder below and holds whatever the subagent read.
+
+It's read from the logs Claude Code writes, every 15 seconds while a thread is in
+use, so it costs no quota. Zed draws only a flat list here, not a tree. Claude Code
+only, as other agents have no such logs.
+
 ## Config
 
 | Env var | Default | Purpose |
@@ -195,12 +216,15 @@ covers the main conversation only, not subagents.
 | `ZED_AGENT_USAGE_PROMPT_CACHE` | on | `off` removes the prompt cache estimate |
 | `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command its own card again |
 | `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
-| `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot and activity record live |
+| `ZED_AGENT_USAGE_AGENT_MAP` | on | `off` removes the agent map |
+| `ZED_AGENT_USAGE_AGENT_MAP_MS` | `15000` | How often the agent map checks for changes |
+| `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot, activity record and subagent log copies live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
 | `ZED_AGENT_USAGE_PROVIDER` | `claude` | Provider, if `--provider` is not passed |
 | `ZED_AGENT_USAGE_PROVIDER_PATH` | – | An out-of-tree provider module |
 | `ZED_AGENT_USAGE_NODE` | auto | Node the launcher uses |
 | `ZED_AGENT_USAGE_ADAPTER_COMMAND` / `_ARGS` | auto | Override the wrapped adapter |
+| `ZED_AGENT_USAGE_ZED_COMMAND` / `_ARGS` | auto | Override Zed's command-line tool |
 | `CLAUDE_AGENT_SDK` / `CODEX_BIN` | auto | Override a provider's binary |
 
 ## Layout
@@ -215,6 +239,7 @@ lib/windows.mjs           countdown labelling
 lib/cache.mjs             snapshot + activity record shared between proxies
 lib/commands.mjs          the summary card and shortened command labels
 lib/prompt-cache.mjs      the prompt cache estimate
+lib/agent-map.mjs         the agent map and its readable logs
 lib/resolve.mjs           finding node and Zed's installed binaries
 lib/jsonc.mjs             comment-preserving settings.json edits
 ```

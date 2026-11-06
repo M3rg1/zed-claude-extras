@@ -25,6 +25,9 @@ export default {
   resolveAdapter() {
     return { command: process.execPath, args: [path.join(here, "fake-adapter.mjs")] };
   },
+  agentLogDir() {
+    return process.env.ZED_AGENT_USAGE_FAKE_AGENTS_DIR ?? null;
+  },
   async fetchUsage() {
     // Lets a test drive the failure path that puts "?" on the label. "after-first"
     // is the interesting one: a snapshot exists, then reads start failing.

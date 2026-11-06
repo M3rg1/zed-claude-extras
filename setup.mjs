@@ -47,7 +47,7 @@ const forJson = (p) => p.split(path.sep).join("/");
 
 const provider = await loadProvider(providerId);
 const name = flag("name") ?? `${provider.displayName} + usage`;
-const launcher = path.join(repo, "bin", isWindows ? "zed-agent-usage.cmd" : "zed-agent-usage");
+const launcher = path.join(repo, "bin", isWindows ? "zed-claude-extras.cmd" : "zed-claude-extras");
 const settings = settingsPath();
 const adapter = provider.resolveAdapter();
 

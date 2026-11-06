@@ -37,7 +37,7 @@ pick_node() {
 
 node_bin=$(pick_node)
 if [ -z "$node_bin" ]; then
-  echo "zed-agent-usage: no node found. Set ZED_AGENT_USAGE_NODE to a node binary." >&2
+  echo "zed-claude-extras: no node found. Set ZED_AGENT_USAGE_NODE to a node binary." >&2
   exit 1
 fi
 

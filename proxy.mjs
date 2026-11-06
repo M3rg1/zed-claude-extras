@@ -105,7 +105,7 @@ const SUBAGENT_FILTER = off(process.env.ZED_AGENT_USAGE_HIDE_SUBAGENTS ?? "on")
 const TITLE_PREFIX = (process.env.ZED_AGENT_USAGE_TITLE_PREFIX ?? "").trim();
 
 const log = (msg) => {
-  if (DEBUG) process.stderr.write(`[agent-usage] ${msg}\n`);
+  if (DEBUG) process.stderr.write(`[zed-claude-extras] ${msg}\n`);
 };
 
 function providerId() {
@@ -157,7 +157,7 @@ const child = spawn(command, args, {
 });
 
 child.on("error", (err) => {
-  process.stderr.write(`[agent-usage] failed to spawn adapter: ${err.message}\n`);
+  process.stderr.write(`[zed-claude-extras] failed to spawn adapter: ${err.message}\n`);
   process.exit(1);
 });
 child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 0)));

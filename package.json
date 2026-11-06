@@ -1,10 +1,10 @@
 {
-  "name": "zed-agent-usage",
+  "name": "zed-claude-extras",
   "version": "0.3.0",
   "private": true,
   "license": "MIT",
   "author": "Ortwin Van der Stappen",
-  "description": "ACP proxy that shows agent plan usage (rolling + weekly) in the Zed agent thread title",
+  "description": "ACP proxy that adds plan usage, an agent map and tidier tool cards to Claude threads in Zed's agent panel",
   "type": "module",
   "scripts": {
     "setup": "node setup.mjs",

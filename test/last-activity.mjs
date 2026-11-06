@@ -13,7 +13,7 @@ import { testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Own cache dir, so this never touches the developer's real activity record.
-const cacheDir = mkdtempSync(path.join(tmpdir(), "zed-agent-usage-test-"));
+const cacheDir = mkdtempSync(path.join(tmpdir(), "zed-claude-extras-test-"));
 
 /** Run one proxy, drive it, and report the injected selectors it emitted. */
 function run(drive, extraEnv = {}) {

@@ -1,10 +1,10 @@
-# zed-agent-usage
+# zed-claude-extras
 
-ACP proxy that adds to Zed's agent panel, for Claude and Codex threads:
+ACP proxy that adds to Claude threads in Zed's agent panel:
 
 - **Usage**: plan limits with reset countdowns, and the prompt cache's time left.
 - **Last activity**: when the thread was last worked in, as a date and time.
-- **Agent map** (Claude): the thread's subagents as a tree; each opens its log.
+- **Agent map**: the thread's subagents as a tree; each opens its log.
 - **Command card**: one card per run of shell commands and lookups.
 - **Hidden subagent work**: subagents' tool calls kept out of the thread.
 - **Title prefix**: a per-agent prefix on thread titles.
@@ -19,19 +19,18 @@ Bypass Permissions   Opus (1M context)   Xhigh   Usage · 42m   28 Aug, 11:39
 
 ## Setup
 
-No dependencies; reuses the adapters and node Zed has downloaded.
+No dependencies; reuses the Claude adapter and node Zed has downloaded.
 
 ```sh
-node setup.mjs                            # dry run: what it writes, and where
-node setup.mjs --write                    # write it; backs up settings.json first
-node setup.mjs --provider codex --write   # Codex
+node setup.mjs            # dry run: what it writes, and where
+node setup.mjs --write    # write it; backs up settings.json first
 ```
 
-Then pick **Claude + usage** in the agent panel. Existing `claude-acp` / `codex-acp`
-entries are left as they are.
+Then pick **Claude + usage** in the agent panel. An existing `claude-acp` entry is
+left as it is.
 
 For setup by a coding agent:
-`https://raw.githubusercontent.com/ortwinvanderstappen/zed-agent-usage/main/agent-instructions.md`
+`https://raw.githubusercontent.com/M3rg1/zed-claude-extras/main/agent-instructions.md`
 
 Settings are read at startup and the proxy is long-lived: restart the agent after
 changing settings or updating this repo.
@@ -64,14 +63,9 @@ Usage fetches (settings named without their `ZED_AGENT_USAGE_` prefix):
 
 ## Where the numbers come from
 
-No credentials handled, no model calls, no quota used; each provider runs a
-subprocess that authenticates itself.
-
-- **Claude**: the Agent SDK's `get_usage` control request (the data behind
-  `/usage`). Experimental upstream; isolated in `providers/claude.mjs`.
-- **Codex**: `codex app-server` → `account/rateLimits/read`.
-
-A new provider is one file: [providers/README.md](providers/README.md).
+The Agent SDK's `get_usage` control request (the data behind `/usage`), run in a
+subprocess that authenticates itself: no credentials handled, no model calls, no
+quota used. Experimental upstream; isolated in `providers/claude.mjs`.
 
 ## Usage item
 
@@ -107,8 +101,7 @@ age. Survives a reopen.
 ## Hiding selectors
 
 `ZED_AGENT_USAGE_HIDE=mode,fast` drops the agent's own selectors from the row. Ids:
-Claude `mode`, `model`, `effort`, `fast`; Codex `mode`, `collaboration_mode`,
-`model`, `reasoning_effort`, `fast-mode`. `ZED_AGENT_USAGE_DEBUG=1` logs them
+`mode`, `model`, `effort`, `fast`. `ZED_AGENT_USAGE_DEBUG=1` logs them
 (`config options:` in `dev: open acp logs`). A hidden selector can't be changed from
 the panel: pin it in `default_config_options` first.
 
@@ -137,7 +130,7 @@ each subagent's log.
 
 ## Agent map
 
-Claude only. Appears once a thread has subagents, as `5 agents · 1 running`. Click
+Appears once a thread has subagents, as `5 agents · 1 running`. Click
 for the list: running first, then newest first, each subagent's own subagents
 indented under it:
 
@@ -200,37 +193,35 @@ Set in the agent entry's `env` block in `settings.json`.
 | `ZED_AGENT_USAGE_TITLE_PREFIX` | – | Text put in front of this agent's thread titles |
 | `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot, activity record and subagent log copies live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
-| `ZED_AGENT_USAGE_PROVIDER` | `claude` | Provider, if `--provider` is not passed |
-| `ZED_AGENT_USAGE_PROVIDER_PATH` | – | An out-of-tree provider module |
 | `ZED_AGENT_USAGE_NODE` | auto | Node the launcher uses |
 | `ZED_AGENT_USAGE_ADAPTER_COMMAND` / `_ARGS` | auto | Override the wrapped adapter |
 | `ZED_AGENT_USAGE_ZED_COMMAND` / `_ARGS` | auto | Override Zed's command-line tool |
-| `CLAUDE_AGENT_SDK` / `CODEX_BIN` | auto | Override a provider's binary |
+| `CLAUDE_AGENT_SDK` | auto | Override the Agent SDK binary |
 
 ## Layout
 
 ```
-proxy.mjs                 ACP relay + the injected selectors
-setup.mjs                 writes this machine's Zed settings entry
-usage.mjs                 prints a provider's snapshot
-bin/zed-agent-usage[.cmd] what Zed spawns; finds node at run time
-providers/                one file per agent
-lib/windows.mjs           countdown labelling
-lib/cache.mjs             snapshot + activity record shared between proxies
-lib/commands.mjs          the summary card and shortened command labels
-lib/subagents.mjs         hiding subagents' work
-lib/prompt-cache.mjs      the prompt cache estimate
-lib/agent-map.mjs         the agent map and its readable logs
-lib/usage-item.mjs        the usage item and its dropdown
-lib/resolve.mjs           finding node and Zed's installed binaries
-lib/jsonc.mjs             comment-preserving settings.json edits
+proxy.mjs                     ACP relay + the injected selectors
+setup.mjs                     writes this machine's Zed settings entry
+usage.mjs                     prints the usage snapshot
+bin/zed-claude-extras[.cmd]   what Zed spawns; finds node at run time
+providers/claude.mjs          the usage source and the Claude Code log paths
+lib/windows.mjs               countdown labelling
+lib/cache.mjs                 snapshot + activity record shared between proxies
+lib/commands.mjs              the summary card and shortened command labels
+lib/subagents.mjs             hiding subagents' work
+lib/prompt-cache.mjs          the prompt cache estimate
+lib/agent-map.mjs             the agent map and its readable logs
+lib/usage-item.mjs            the usage item and its dropdown
+lib/resolve.mjs               finding node and Zed's installed binaries
+lib/jsonc.mjs                 comment-preserving settings.json edits
 ```
 
 ## Tests
 
 ```sh
 npm test                  # unit, settings, and the proxy against a canned adapter
-npm run usage             # live Claude snapshot (or: npm run usage:codex)
+npm run usage             # live usage snapshot
 npm run test:real         # against the real adapter, handshake only
 ```
 
@@ -245,5 +236,7 @@ npm run test:real         # against the real adapter, handshake only
 
 ## License
 
-[MIT](LICENSE). Not affiliated with Anthropic, OpenAI or Zed Industries. Relies on
+[MIT](LICENSE). Forked from
+[ortwinvanderstappen/zed-agent-usage](https://github.com/ortwinvanderstappen/zed-agent-usage).
+Not affiliated with Anthropic or Zed Industries. Relies on
 internal and experimental interfaces; may break on any upstream release.

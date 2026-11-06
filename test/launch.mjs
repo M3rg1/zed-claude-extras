@@ -17,7 +17,7 @@ export const launcherPath = path.join(
   here,
   "..",
   "bin",
-  isWindows ? "zed-agent-usage.cmd" : "zed-agent-usage",
+  isWindows ? "zed-claude-extras.cmd" : "zed-claude-extras",
 );
 
 /** The environment to start a proxy with: this one, minus the plugin's own settings.

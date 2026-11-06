@@ -6,7 +6,7 @@ import { insertAgentServer, toStrictJson } from "../lib/jsonc.mjs";
 
 const BLOCK = `"Claude + usage": {
   "type": "custom",
-  "command": "/repo/bin/zed-agent-usage",
+  "command": "/repo/bin/zed-claude-extras",
   "args": []
 }`;
 
@@ -79,7 +79,7 @@ check("inserts into an existing agent_servers block", () => {
 check("creates agent_servers when absent", () => {
   const after = insertAgentServer(`{\n  "theme": "One Dark"\n}`, BLOCK);
   const parsed = parse(after);
-  assert.equal(parsed.agent_servers["Claude + usage"].command, "/repo/bin/zed-agent-usage");
+  assert.equal(parsed.agent_servers["Claude + usage"].command, "/repo/bin/zed-claude-extras");
   assert.equal(parsed.theme, "One Dark");
 });
 

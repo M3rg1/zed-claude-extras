@@ -22,6 +22,7 @@ import {
 } from "./lib/cache.mjs";
 import { AgentLogReader, agentForValue, agentLogMarkdown, agentMapOption } from "./lib/agent-map.mjs";
 import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
+import { TurnTimes } from "./lib/turn-times.mjs";
 import { SubagentFilter } from "./lib/subagents.mjs";
 import { cacheLeft, cacheTtlMs } from "./lib/prompt-cache.mjs";
 import { zedCli } from "./lib/resolve.mjs";
@@ -101,6 +102,8 @@ const SUBAGENT_FILTER = off(process.env.ZED_AGENT_USAGE_HIDE_SUBAGENTS ?? "on")
  *  generic icon and has no setting for it, so the title is the one place in the
  *  sidebar that can say which agent entry a thread runs on. */
 const TITLE_PREFIX = (process.env.ZED_AGENT_USAGE_TITLE_PREFIX ?? "").trim();
+/** A card at the start and the end of each turn, with its times. `off` disables. */
+const TURN_TIMES = off(process.env.ZED_AGENT_USAGE_TURN_TIMES ?? "on") ? null : new TurnTimes();
 
 const log = (msg) => {
   if (DEBUG) process.stderr.write(`[zed-claude-extras] ${msg}\n`);
@@ -412,6 +415,9 @@ function transform(message) {
     finishCommandCard(turnRequests.get(message.id));
     turnRequests.delete(message.id);
   }
+  // After the summary card, so the turn's last card is its end.
+  const turnEnd = isResponse ? TURN_TIMES?.end(message, Date.now()) : null;
+  if (turnEnd) send({ jsonrpc: "2.0", method: "session/update", params: turnEnd });
   if (isResponse && promptRequests.has(message.id)) {
     promptCacheTurns.set(promptRequests.get(message.id), { running: false, endedAt: Date.now() });
     promptRequests.delete(message.id);
@@ -516,6 +522,10 @@ function interceptFromClient(message) {
     turnRequests.set(message.id, message.params?.sessionId);
   }
   if (message?.method === "session/prompt") {
+    if (message.id !== undefined && message.params?.sessionId) {
+      const turnStart = TURN_TIMES?.start(message.id, message.params.sessionId, Date.now());
+      if (turnStart) send({ jsonrpc: "2.0", method: "session/update", params: turnStart });
+    }
     promptCacheTurns.set(message.params?.sessionId, { running: true, endedAt: 0 });
     promptRequests.set(message.id, message.params?.sessionId);
     renderSelectors();

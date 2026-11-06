@@ -9,7 +9,7 @@
   "scripts": {
     "setup": "node setup.mjs",
     "usage": "node usage.mjs",
-    "test": "node test/windows.mjs && node test/units.mjs && node test/commands.mjs && node test/prompt-cache.mjs && node test/agent-map.mjs && node test/usage-item.mjs && node test/settings.mjs && node test/run.mjs && node test/run.mjs --countdown && node test/run.mjs --marker && node test/run.mjs --no-marker && node test/run.mjs --stale && node test/run.mjs --hide && node test/resumed.mjs && node test/idle.mjs && node test/title-prefix.mjs && node test/run.mjs --launcher",
+    "test": "node test/windows.mjs && node test/units.mjs && node test/commands.mjs && node test/prompt-cache.mjs && node test/agent-map.mjs && node test/turn-times.mjs && node test/usage-item.mjs && node test/settings.mjs && node test/run.mjs && node test/run.mjs --countdown && node test/run.mjs --marker && node test/run.mjs --no-marker && node test/run.mjs --stale && node test/run.mjs --hide && node test/resumed.mjs && node test/idle.mjs && node test/title-prefix.mjs && node test/run.mjs --launcher",
     "test:launcher": "node test/run.mjs --launcher",
     "test:real": "node test/real.mjs",
     "test:unit": "node test/windows.mjs && node test/units.mjs"

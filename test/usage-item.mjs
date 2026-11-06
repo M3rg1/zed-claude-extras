@@ -133,6 +133,7 @@ if (savedKey !== undefined) process.env.ANTHROPIC_API_KEY = savedKey;
 
 /** Runs a proxy like Zed, sends it `first` once it's up, and resolves to the last
  *  usage item it published once `done(item)` holds, or after 6 seconds. */
+let crashed = false;
 function lastItem(env, first, done) {
   const [command, args] = launchArgv({ viaLauncher: false });
   const child = spawn(command, args, {
@@ -148,7 +149,12 @@ function lastItem(env, first, done) {
   });
   return new Promise((resolve) => {
     let item = null;
+    let finished = false;
+    child.on("exit", () => {
+      if (!finished) crashed = true;
+    });
     const finish = () => {
+      finished = true;
       child.kill();
       resolve(item);
     };
@@ -208,7 +214,8 @@ assert.equal(
   "an old API thread shows its cache, the only thing it has",
 );
 assert.equal(shown(await lastItem(reopen(null), openOld, (i) => shown(i).includes("Usage"))), "Usage", "no transcript: no guess");
-assert.equal(shown(await lastItem(reopen("fail"), openOld, (i) => shown(i).includes("Usage"))), "Usage", "an unreadable one neither");
+assert.equal(shown(await lastItem(reopen("fail"), openOld, () => false)), "Usage", "an unreadable one neither");
+assert.ok(!crashed, "and it does not take the relay down");
 
 // Finding that time in a real transcript's shape.
 const configDir = path.join(scratch, "claude-config");

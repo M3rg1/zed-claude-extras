@@ -162,6 +162,18 @@ as file reads and edits, keep their cards.
 With the summary off, each command gets its card back, with its label cut to 80
 characters. That label's copy button copies the short version.
 
+## Prompt cache estimate
+
+Once a turn has run in a thread, the usage item also shows how long its prompt
+cache has left, as `cache 42m` or `cache cold`. A cold cache makes your next message
+cost more, because the conversation has to be written to the cache again.
+
+Nothing reports this live, so it's an estimate: a countdown from the end of the
+last turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
+set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL` says otherwise. It doesn't read the
+`promptCacheTtl` setting, notice compaction or see the cache dropped early, and it
+covers the main conversation only, not subagents.
+
 ## Config
 
 | Env var | Default | Purpose |
@@ -176,6 +188,7 @@ characters. That label's copy button copies the short version.
 | `ZED_AGENT_USAGE_IDLE_AFTER_MS` | `600000` | No turns for this long: stop refreshing |
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
 | `ZED_AGENT_USAGE_LAST_ACTIVITY` | on | `off` removes the last-activity item |
+| `ZED_AGENT_USAGE_PROMPT_CACHE` | on | `off` removes the prompt cache estimate |
 | `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command its own card again |
 | `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
 | `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot and activity record live |
@@ -196,7 +209,8 @@ bin/zed-agent-usage[.cmd] what Zed spawns; finds node at run time
 providers/                one file per agent
 lib/windows.mjs           countdown labelling
 lib/cache.mjs             snapshot + activity record shared between proxies
-lib/commands.mjs          shortening command labels
+lib/commands.mjs          the summary card and shortened command labels
+lib/prompt-cache.mjs      the prompt cache estimate
 lib/resolve.mjs           finding node and Zed's installed binaries
 lib/jsonc.mjs             comment-preserving settings.json edits
 ```

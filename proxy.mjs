@@ -20,6 +20,7 @@ import {
   writeSessionActivity,
 } from "./lib/cache.mjs";
 import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
+import { cacheLabel, cacheTtlMs } from "./lib/prompt-cache.mjs";
 import {
   clampPercent,
   describeWindows,
@@ -81,6 +82,10 @@ const MARKER = (() => {
  *  never does. */
 const MARKER_AT = clampPercent(process.env.ZED_AGENT_USAGE_MARKER_AT, 90);
 
+/** How long a thread's prompt cache lasts, or null with the estimate turned off. */
+const PROMPT_CACHE_TTL_MS = off(process.env.ZED_AGENT_USAGE_PROMPT_CACHE ?? "on")
+  ? null
+  : cacheTtlMs(process.env);
 const COMMAND_MAX = resolveCommandMax(process.env.ZED_AGENT_USAGE_COMMAND_MAX);
 const COMMAND_SUMMARY = off(process.env.ZED_AGENT_USAGE_COMMAND_SUMMARY ?? "on")
   ? null
@@ -175,6 +180,10 @@ let sessionActivity = SHOW_LAST_ACTIVITY ? readSessionActivity() : new Map();
 const pendingSessionIds = new Map();
 /** Request id -> sessionId, for the requests whose response ends a summary card. */
 const turnRequests = new Map();
+/** sessionId -> { running, endedAt } of its last turn, for the cache estimate. */
+const promptCacheTurns = new Map();
+/** Request id -> sessionId, for the prompts still running. */
+const promptRequests = new Map();
 
 function suffix() {
   return usage?.available ? formatWindows(usage.windows) : "";
@@ -188,6 +197,11 @@ function staleMinutes() {
 
 /** The label Zed shows: the windows, a marker when one is running out, and a
  *  "?" when the numbers have stopped being refreshed. */
+function promptCacheLabel(sessionId) {
+  if (PROMPT_CACHE_TTL_MS === null) return "";
+  return cacheLabel(promptCacheTurns.get(sessionId), PROMPT_CACHE_TTL_MS, Date.now());
+}
+
 function usageLabel() {
   const tail = suffix();
   if (!tail) return "";
@@ -199,13 +213,15 @@ function usageLabel() {
 
 /** Our selector. Single-value so it reads as a label, and no `category` so Zed
  *  does not treat it as a model or mode picker. */
-function usageOption() {
-  const label = usageLabel();
+function usageOption(sessionId) {
+  const cache = promptCacheLabel(sessionId);
+  const label = [usageLabel(), cache].filter(Boolean).join(" · ");
   if (!label) return null;
   const stale = staleMinutes();
   const detail = [
     describeWindows(usage?.windows),
     stale == null ? null : `last read ${stale}m ago`,
+    cache ? "cache time is an estimate" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -251,7 +267,7 @@ function lastActivityOption(sessionId) {
 function withOwnOptions(configOptions, sessionId) {
   if (!Array.isArray(configOptions)) return configOptions;
   const kept = HIDDEN.size ? configOptions.filter((opt) => !HIDDEN.has(opt?.id)) : configOptions;
-  const mine = [usageOption(), lastActivityOption(sessionId)].filter(Boolean);
+  const mine = [usageOption(sessionId), lastActivityOption(sessionId)].filter(Boolean);
   return mine.length ? [...kept, ...mine] : kept;
 }
 
@@ -291,7 +307,8 @@ function republishConfigOptions() {
 
 /** Publish only when the rendered label actually changed. */
 function renderSelectors() {
-  const next = usageLabel();
+  const cacheLabels = [...promptCacheTurns.keys()].map(promptCacheLabel).join();
+  const next = `${usageLabel()}|${cacheLabels}`;
   if (next === lastSuffix) return;
   lastSuffix = next;
   republishConfigOptions();
@@ -385,6 +402,11 @@ function transform(message) {
     finishCommandCard(turnRequests.get(message.id));
     turnRequests.delete(message.id);
   }
+  if (isResponse && promptRequests.has(message.id)) {
+    promptCacheTurns.set(promptRequests.get(message.id), { running: false, endedAt: Date.now() });
+    promptRequests.delete(message.id);
+    renderSelectors();
+  }
 
   // session/list is how Zed populates its thread list, and each SessionInfo
   // carries the agent's own updatedAt -- history we could not otherwise know.
@@ -463,8 +485,11 @@ function interceptFromClient(message) {
     finishCommandCard(message.params?.sessionId);
     turnRequests.set(message.id, message.params?.sessionId);
   }
-  // Turn start: worth a look before the user commits to a prompt.
   if (message?.method === "session/prompt") {
+    promptCacheTurns.set(message.params?.sessionId, { running: true, endedAt: 0 });
+    promptRequests.set(message.id, message.params?.sessionId);
+    renderSelectors();
+    // Turn start: worth a look before the user commits to a prompt.
     lastTurnAt = Date.now();
     noteActivity(message.params?.sessionId);
     void refreshUsage({ reason: "turn start" });
@@ -475,6 +500,7 @@ function interceptFromClient(message) {
     const gone = message.params?.sessionId;
     if (gone && rawConfigOptions.delete(gone)) log(`forgot session ${gone}`);
     if (gone) sessionActivity.delete(gone);
+    if (gone) promptCacheTurns.delete(gone);
   }
 
   if (message?.method !== "session/set_config_option") return false;

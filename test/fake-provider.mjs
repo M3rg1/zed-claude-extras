@@ -34,7 +34,7 @@ export default {
       throw new Error("stub provider failing on purpose");
     }
     return {
-      available: true,
+      available: process.env.ZED_AGENT_USAGE_FAKE_UNAVAILABLE !== "1",
       planType: "test",
       windows: [
         { label: "5h", usedPercent: 42, resetsAt: countdown ? inSeconds(rollingSeconds) : null },

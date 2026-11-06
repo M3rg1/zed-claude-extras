@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCommandMax, shortenCommand } from "../lib/commands.mjs";
-import { launchArgv } from "./launch.mjs";
+import { launchArgv, testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,7 +38,7 @@ function runPrompt(env) {
   const child = spawn(command, args, {
     stdio: ["pipe", "pipe", "inherit"],
     env: {
-      ...process.env,
+      ...testEnv(),
       ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
       ZED_AGENT_USAGE_CACHE: "off",
       ...env,

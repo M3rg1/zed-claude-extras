@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Own cache dir, so this never touches the developer's real activity record.
@@ -20,7 +21,7 @@ function run(drive, extraEnv = {}) {
     const child = spawn(process.execPath, [path.join(here, "..", "proxy.mjs")], {
       stdio: ["pipe", "pipe", "inherit"],
       env: {
-        ...process.env,
+        ...testEnv(),
         ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
         ZED_AGENT_USAGE_CACHE_DIR: cacheDir,
         ZED_AGENT_USAGE_CACHE: "off", // don't share usage snapshots between passes

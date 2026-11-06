@@ -6,6 +6,17 @@ import assert from "node:assert/strict";
 import { acquireFetchLock, readCache, waitForCache, writeCache } from "../lib/cache.mjs";
 import { windowsFromRateLimits } from "../providers/codex.mjs";
 import { formatWindows } from "../lib/windows.mjs";
+import { testEnv } from "./launch.mjs";
+
+// --- the tests' own environment ---------------------------------------------
+// Tests run from an agent in Zed inherit that agent's settings, which would change
+// what the proxy shows.
+process.env.ZED_AGENT_USAGE_MARKER = "off";
+process.env.UNRELATED_TO_THE_PROXY = "kept";
+assert.equal(testEnv().ZED_AGENT_USAGE_MARKER, undefined, "the plugin's own settings stay out");
+assert.equal(testEnv().UNRELATED_TO_THE_PROXY, "kept", "everything else is passed on");
+delete process.env.ZED_AGENT_USAGE_MARKER;
+delete process.env.UNRELATED_TO_THE_PROXY;
 
 // --- cache ----------------------------------------------------------------
 const id = `test-${process.pid}`;

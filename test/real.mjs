@@ -6,7 +6,7 @@
  *   PROMPT="hi" node test/real.mjs      also sends one short turn (uses quota)
  */
 import { spawn } from "node:child_process";
-import { launchArgv } from "./launch.mjs";
+import { launchArgv, testEnv } from "./launch.mjs";
 
 const prompt = process.env.PROMPT;
 const viaLauncher = process.argv.includes("--launcher");
@@ -20,7 +20,7 @@ console.log(`running: ${command} ${commandArgs.join(" ")}`);
 
 const child = spawn(command, commandArgs, {
   stdio: ["pipe", "pipe", "inherit"],
-  env: { ...process.env, ZED_AGENT_USAGE_DEBUG: "1" },
+  env: { ...testEnv(), ZED_AGENT_USAGE_DEBUG: "1" },
 });
 
 const send = (m) => child.stdin.write(`${JSON.stringify(m)}\n`);

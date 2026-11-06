@@ -20,6 +20,13 @@ export const launcherPath = path.join(
   isWindows ? "zed-agent-usage.cmd" : "zed-agent-usage",
 );
 
+/** The environment to start a proxy with: this one, minus the plugin's own settings.
+ *  A test run from an agent in Zed inherits that agent's `env` block, which would
+ *  change what the proxy shows. */
+export function testEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("ZED_AGENT_USAGE_")));
+}
+
 /** `[command, args]` for spawning the proxy, with `extra` appended. */
 export function launchArgv({ viaLauncher, extra = [] }) {
   if (!viaLauncher) return [process.execPath, [proxyPath, ...extra]];

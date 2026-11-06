@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,7 +19,7 @@ function run({ ms, env }) {
     const child = spawn(process.execPath, [path.join(here, "..", "proxy.mjs")], {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
-        ...process.env,
+        ...testEnv(),
         ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
         ZED_AGENT_USAGE_DEBUG: "1",
         ZED_AGENT_USAGE_CACHE: "off", // never share with the developer's real proxies

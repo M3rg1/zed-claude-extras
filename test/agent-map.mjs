@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLogReader, agentForValue, agentLogMarkdown, agentMapOption } from "../lib/agent-map.mjs";
-import { launchArgv } from "./launch.mjs";
+import { launchArgv, testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const scratch = mkdtempSync(path.join(tmpdir(), "agent-map-test-"));
@@ -188,7 +188,7 @@ function throughProxy(env, script) {
   const child = spawn(command, args, {
     stdio: ["pipe", "pipe", "inherit"],
     env: {
-      ...process.env,
+      ...testEnv(),
       ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
       ZED_AGENT_USAGE_CACHE: "off",
       ZED_AGENT_USAGE_CACHE_DIR: path.join(scratch, "cache"),

@@ -21,7 +21,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchArgv } from "./launch.mjs";
+import { launchArgv, testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,7 +61,7 @@ const EXPECTED =
 const child = spawn(command, commandArgs, {
   stdio: ["pipe", "pipe", "inherit"],
   env: {
-    ...process.env,
+    ...testEnv(),
     ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
     ZED_AGENT_USAGE_DEBUG: "1",
     ...(countdown ? { ZED_AGENT_USAGE_FAKE_COUNTDOWN: "1" } : {}),

@@ -4,7 +4,9 @@ ACP proxy that adds to Claude threads in Zed's agent panel:
 
 - **Usage**: plan limits with reset countdowns, and the prompt cache's time left.
 - **Agent map**: the thread's subagents as a tree; each opens its log.
-- **Turn times**: a line in the reply when you send a message and one when Claude finishes.
+- **Turn times**: a line in the reply when a turn starts (`Sent`, or `Woke` when Claude
+  starts one itself) and one when it ends (`Done`, or `Sleeping` while a background
+  command runs).
 - **Command card**: one card per run of shell commands and lookups.
 - **Hidden subagent work**: subagents' tool calls kept out of the thread.
 - **Title prefix**: a per-agent prefix on thread titles.
@@ -226,6 +228,7 @@ proxy.mjs                     ACP relay + the injected selectors
 setup.mjs                     writes this machine's Zed settings entry
 usage.mjs                     prints the usage snapshot
 bin/zed-claude-extras[.cmd]   what Zed spawns; finds node at run time
+providers/index.mjs           loads the provider: claude, or the tests' stand-in
 providers/claude.mjs          the usage source and the Claude Code log paths
 lib/windows.mjs               countdown labelling
 lib/cache.mjs                 the usage snapshot shared between proxies

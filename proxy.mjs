@@ -19,7 +19,7 @@ import {
   writeCache,
   writeSessionActivity,
 } from "./lib/cache.mjs";
-import { resolveCommandMax, shortenCommand } from "./lib/commands.mjs";
+import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
 import {
   clampPercent,
   describeWindows,
@@ -82,6 +82,9 @@ const MARKER = (() => {
 const MARKER_AT = clampPercent(process.env.ZED_AGENT_USAGE_MARKER_AT, 90);
 
 const COMMAND_MAX = resolveCommandMax(process.env.ZED_AGENT_USAGE_COMMAND_MAX);
+const COMMAND_SUMMARY = off(process.env.ZED_AGENT_USAGE_COMMAND_SUMMARY ?? "on")
+  ? null
+  : new CommandSummary(COMMAND_MAX);
 
 const log = (msg) => {
   if (DEBUG) process.stderr.write(`[agent-usage] ${msg}\n`);
@@ -170,6 +173,8 @@ let sessionActivity = SHOW_LAST_ACTIVITY ? readSessionActivity() : new Map();
  *  the id only in the request, so a resumed thread would otherwise never be
  *  registered here and its label would freeze at whatever it loaded with. */
 const pendingSessionIds = new Map();
+/** Request id -> sessionId, for the requests whose response ends a summary card. */
+const turnRequests = new Map();
 
 function suffix() {
   return usage?.available ? formatWindows(usage.windows) : "";
@@ -361,13 +366,25 @@ function adopt(snapshot, note) {
   scheduleResetRefresh();
 }
 
-/** Inspect one agent -> client message, decorating the selector in place. */
+/** Tells Zed a session's summary card is done, if it has one open. */
+function finishCommandCard(sessionId) {
+  const update = COMMAND_SUMMARY?.finishTurn(sessionId);
+  if (update) send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
+}
+
+/** Inspect one agent -> client message, decorating the selector in place. Returns
+ *  what to send on, or null for nothing. */
 function transform(message) {
   // Only a response can answer one of our recorded requests; an agent->client
   // request has its own id space and must not consume the entry.
   const isResponse = message?.id !== undefined && ("result" in message || "error" in message);
   const answered = isResponse ? pendingSessionIds.get(message.id) : undefined;
   if (isResponse) pendingSessionIds.delete(message.id);
+  // Close the card first, so it never trails the end of its own turn.
+  if (isResponse && turnRequests.has(message.id)) {
+    finishCommandCard(turnRequests.get(message.id));
+    turnRequests.delete(message.id);
+  }
 
   // session/list is how Zed populates its thread list, and each SessionInfo
   // carries the agent's own updatedAt -- history we could not otherwise know.
@@ -392,6 +409,11 @@ function transform(message) {
     };
   }
 
+  if (message?.method === "session/request_permission" && COMMAND_SUMMARY && message.params?.toolCall) {
+    const toolCall = COMMAND_SUMMARY.approve(message.params.toolCall);
+    return { ...message, params: { ...message.params, toolCall } };
+  }
+
   if (message?.method !== "session/update") return message;
   const sessionId = message.params?.sessionId;
   const update = message.params?.update;
@@ -399,15 +421,11 @@ function transform(message) {
 
   // Only session/update is rewritten: session/request_permission keeps the whole
   // command, so what the user approves is never cut short.
-  if (COMMAND_MAX !== null && update.kind === "execute" && typeof update.title === "string") {
-    return {
-      ...message,
-      params: {
-        ...message.params,
-        update: { ...update, title: shortenCommand(update.title, COMMAND_MAX) },
-      },
-    };
-  }
+  let shown = update;
+  if (COMMAND_SUMMARY) shown = COMMAND_SUMMARY.filter(sessionId, update);
+  else if (COMMAND_MAX !== null && update.kind === "execute") shown = shortenTitle(update, COMMAND_MAX);
+  if (shown === null) return null;
+  if (shown !== update) return { ...message, params: { ...message.params, update: shown } };
 
   // Re-inject when the adapter republishes its set, e.g. after a mode switch.
   if (update.sessionUpdate === "config_option_update") {
@@ -439,6 +457,11 @@ function interceptFromClient(message) {
   // Remember which session a request belongs to; its response may not say.
   if (message?.id !== undefined && message.params?.sessionId) {
     pendingSessionIds.set(message.id, message.params.sessionId);
+  }
+  // Replaying a thread reports its old commands, so a load gets a card as well.
+  if (message?.method === "session/prompt" || message?.method === "session/load") {
+    finishCommandCard(message.params?.sessionId);
+    turnRequests.set(message.id, message.params?.sessionId);
   }
   // Turn start: worth a look before the user commits to a prompt.
   if (message?.method === "session/prompt") {
@@ -512,7 +535,8 @@ child.stdout.on("data", (chunk) => {
       continue;
     }
     try {
-      send(transform(message));
+      const shown = transform(message);
+      if (shown) send(shown);
     } catch (err) {
       log(`transform failed, passing through: ${err?.message || err}`);
       process.stdout.write(`${line}\n`);

@@ -3,6 +3,7 @@
 const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`);
 
 let buffer = "";
+let turn = 0;
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   buffer += chunk;
@@ -33,22 +34,39 @@ process.stdin.on("data", (chunk) => {
       const command = `echo ${"long ".repeat(40)}`;
       const toolUpdate = (update) =>
         send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
-      const bash = { toolCallId: "bash_1", title: command, kind: "execute" };
-      toolUpdate({ ...bash, sessionUpdate: "tool_call", status: "pending", rawInput: { command } });
-      toolUpdate({ ...bash, sessionUpdate: "tool_call_update", rawInput: { command } });
+      turn += 1;
+      const bash = (n) => ({ toolCallId: `bash_${n}_${turn}`, title: command, kind: "execute" });
+      const report = (n) => {
+        toolUpdate({ ...bash(n), sessionUpdate: "tool_call", status: "pending", rawInput: { command } });
+        toolUpdate({ ...bash(n), sessionUpdate: "tool_call_update", rawInput: { command } });
+      };
+      const finish = (n, status) =>
+        toolUpdate({ sessionUpdate: "tool_call_update", toolCallId: `bash_${n}_${turn}`, status });
+
+      report(1);
+      finish(1, "completed");
       toolUpdate({
         sessionUpdate: "tool_call",
-        toolCallId: "read_1",
+        toolCallId: `read_${turn}`,
         title: `Read ${"long/".repeat(40)}`,
         kind: "read",
         status: "pending",
       });
+      report(2);
+      finish(2, "failed");
+      report(3);
+      // No title or kind: Zed can't draw a card it hasn't seen without a title.
       send({
         jsonrpc: "2.0",
-        id: 900,
+        id: 900 + turn,
         method: "session/request_permission",
-        params: { sessionId, toolCall: { ...bash, rawInput: { command } }, options: [] },
+        params: {
+          sessionId,
+          toolCall: { toolCallId: `bash_3_${turn}`, rawInput: { command } },
+          options: [],
+        },
       });
+      toolUpdate({ ...bash(3), sessionUpdate: "tool_call_update", status: "completed" });
       send({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
       continue;
     }

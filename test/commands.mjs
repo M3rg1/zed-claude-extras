@@ -46,6 +46,7 @@ function runPrompt(env) {
   });
   const send = (m) => child.stdin.write(`${JSON.stringify(m)}\n`);
   const seen = { updates: [], permission: null, rawInputs: [] };
+  let sessionId;
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -61,21 +62,20 @@ function runPrompt(env) {
         const msg = JSON.parse(buffer.slice(0, i));
         buffer = buffer.slice(i + 1);
         if (msg.id === 1) send({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "." } });
+        const prompt = (id, sessionId) =>
+          send({ jsonrpc: "2.0", id, method: "session/prompt", params: { sessionId, prompt: [] } });
         if (msg.id === 2) {
-          send({
-            jsonrpc: "2.0",
-            id: 3,
-            method: "session/prompt",
-            params: { sessionId: msg.result.sessionId, prompt: [] },
-          });
+          sessionId = msg.result.sessionId;
+          prompt(3, sessionId);
         }
         const update = msg.params?.update;
         if (update?.toolCallId) {
           seen.updates.push(update);
           if (update.rawInput) seen.rawInputs.push(update.rawInput);
         }
-        if (msg.method === "session/request_permission") seen.permission = msg.params.toolCall;
-        if (msg.id === 3) {
+        if (msg.method === "session/request_permission") seen.permission ??= msg.params.toolCall;
+        if (msg.id === 3) prompt(4, sessionId);
+        if (msg.id === 4) {
           clearTimeout(timeout);
           child.kill();
           resolve(seen);
@@ -89,15 +89,50 @@ function runPrompt(env) {
 const titleOf = (seen, toolCallId, sessionUpdate) =>
   seen.updates.find((u) => u.toolCallId === toolCallId && u.sessionUpdate === sessionUpdate)?.title;
 
-const shortened = await runPrompt({ ZED_AGENT_USAGE_COMMAND_MAX: "30" });
 const expected = shortenCommand(LONG, 30);
-assert.equal(titleOf(shortened, "bash_1", "tool_call"), expected, "first report of a command");
-assert.equal(titleOf(shortened, "bash_1", "tool_call_update"), expected, "a later report too");
-assert.equal(titleOf(shortened, "read_1", "tool_call"), `Read ${"long/".repeat(40)}`, "other tools");
-assert.equal(shortened.permission.title, LONG, "approval prompts show the whole command");
-assert.deepEqual(shortened.rawInputs[0], { command: LONG }, "what the agent runs is unchanged");
 
-const off = await runPrompt({ ZED_AGENT_USAGE_COMMAND_MAX: "off" });
-assert.equal(titleOf(off, "bash_1", "tool_call"), LONG, "off keeps the whole command");
+// Summary on, the default: one card a turn stands in for the turn's commands.
+const summary = await runPrompt({ ZED_AGENT_USAGE_COMMAND_MAX: "30" });
+const ids = (seen) => new Set(seen.updates.map((u) => u.toolCallId));
+for (const hidden of ["bash_1_1", "bash_2_1", "bash_1_2", "bash_2_2"]) {
+  assert.ok(!ids(summary).has(hidden), `${hidden} has no card, succeeded or failed`);
+}
+const cardIds = [...ids(summary)].filter((id) => id.startsWith("_commands"));
+assert.equal(cardIds.length, 2, "one card a turn");
+for (const id of cardIds) {
+  const card = summary.updates.filter((u) => u.toolCallId === id);
+  assert.equal(card.filter((u) => u.sessionUpdate === "tool_call").length, 1, "created once");
+  assert.equal(card[0].sessionUpdate, "tool_call", "created before it is updated");
+  assert.equal(card[0].kind, "other", "not drawn as a terminal");
+  assert.equal(card[0].status, "in_progress", "running until the turn ends");
+  assert.equal(card[0].title, `Ran 1 command · last: ${expected}`);
+  assert.equal(card.at(-1).status, "completed", "closed when the turn ends");
+  assert.equal(card.at(-1).title, `Ran 3 commands · last: ${expected}`);
+}
 
-console.log("PASS: long commands are shortened in labels only");
+assert.equal(titleOf(summary, "read_1", "tool_call"), `Read ${"long/".repeat(40)}`, "other tools");
+assert.equal(summary.permission.title, LONG, "approval prompts show the whole command");
+assert.equal(summary.permission.kind, "execute", "and Zed can draw the card");
+assert.deepEqual(summary.permission.rawInput, { command: LONG }, "the agent's input is unchanged");
+const approved = summary.updates.filter((u) => u.toolCallId === "bash_3_1");
+assert.equal(approved.length, 1, "an approved command's card keeps getting its reports");
+assert.equal(approved[0].status, "completed");
+assert.equal(approved[0].title, expected, "and its label is shortened");
+
+// Summary off: every command gets its own card again.
+const cards = await runPrompt({
+  ZED_AGENT_USAGE_COMMAND_MAX: "30",
+  ZED_AGENT_USAGE_COMMAND_SUMMARY: "off",
+});
+assert.equal(titleOf(cards, "bash_1_1", "tool_call"), expected, "first report of a command");
+assert.equal(titleOf(cards, "bash_1_1", "tool_call_update"), expected, "a later report too");
+assert.ok(![...ids(cards)].some((id) => id.startsWith("_commands")), "no summary card");
+assert.deepEqual(cards.rawInputs[0], { command: LONG }, "what the agent runs is unchanged");
+
+const full = await runPrompt({
+  ZED_AGENT_USAGE_COMMAND_MAX: "off",
+  ZED_AGENT_USAGE_COMMAND_SUMMARY: "off",
+});
+assert.equal(titleOf(full, "bash_1_1", "tool_call"), LONG, "both off keeps the whole command");
+
+console.log("PASS: commands collapse into one card a turn, in labels only");

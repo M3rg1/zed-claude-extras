@@ -145,14 +145,22 @@ Zed then renders only what is left, plus the usage. To find the ids, start with
 A hidden selector can no longer be changed from the panel, so pin the value you
 want in `default_config_options` first.
 
-## Shorter command labels
+## One card for shell commands
 
-Zed draws a shell command in full, however long, even with its output collapsed.
-The proxy cuts the command in the card's label to 80 characters. This changes the
-display only: the agent runs the real command, and an approval prompt shows all of
-it. A command you approved may stay in full afterwards. A command that ran without
-a prompt can't be read in full in the panel, and its copy button copies the short
-version.
+Zed draws a card per shell command, each with the command in full, so a long turn
+fills the thread. The proxy shows one card per turn instead:
+
+```
+Ran 18 commands · last: sed -n 70,130p scripts/check-banned
+```
+
+This changes the display only: the agent runs the real commands, and they stay in
+the agent's own logs. Failed commands are hidden like the others. A command awaiting
+approval keeps its own card, with the whole command in the prompt. Other tools, such
+as file reads and edits, keep their cards.
+
+With the summary off, each command gets its card back, with its label cut to 80
+characters. That label's copy button copies the short version.
 
 ## Config
 
@@ -168,7 +176,8 @@ version.
 | `ZED_AGENT_USAGE_IDLE_AFTER_MS` | `600000` | No turns for this long: stop refreshing |
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
 | `ZED_AGENT_USAGE_LAST_ACTIVITY` | on | `off` removes the last-activity item |
-| `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command label, in characters; `off` shows commands in full |
+| `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command its own card again |
+| `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
 | `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot and activity record live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
 | `ZED_AGENT_USAGE_PROVIDER` | `claude` | Provider, if `--provider` is not passed |

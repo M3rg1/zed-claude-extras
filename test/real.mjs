@@ -1,7 +1,6 @@
 /** Drives proxy.mjs against a real ACP adapter.
  *
  *   node test/real.mjs                  claude, handshake only -- no model call
- *   node test/real.mjs codex            codex, handshake only
  *   node test/real.mjs --launcher       start it exactly as Zed is configured to
  *   PROMPT="hi" node test/real.mjs      also sends one short turn (uses quota)
  */

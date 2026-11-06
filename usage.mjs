@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /** Print a provider's usage snapshot -- handy for checking setup.
  *
- *   node usage.mjs            # default provider: claude
- *   node usage.mjs codex
+ *   node usage.mjs
  */
 
 import { formatWindows } from "./lib/windows.mjs";

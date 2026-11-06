@@ -4,8 +4,7 @@
 # Resolves node at run time so settings.json holds no node path: Zed ships its
 # own node under a version-stamped directory, and a GUI-launched Zed does not
 # inherit the shell PATH, so neither an absolute path nor a bare "node" is
-# reliable there. Any arguments are passed through to proxy.mjs, e.g.
-# --provider codex.
+# reliable there. Any arguments are passed through to proxy.mjs.
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 

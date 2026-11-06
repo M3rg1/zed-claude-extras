@@ -8,7 +8,6 @@ import {
   countdownLabel,
   describeWindows,
   formatWindows,
-  labelForMinutes,
   maxUsedPercent,
   msUntil,
   msUntilNextReset,
@@ -120,12 +119,5 @@ assert.equal(maxUsedPercent([]), null, "no windows");
 assert.equal(msUntilNextReset(usage, NOW), 94 * 60_000, "soonest of the two");
 assert.equal(msUntilNextReset([{ resetsAt: null }], NOW), null, "nothing known");
 assert.equal(msUntilNextReset([], NOW), null, "no windows");
-
-// --- labelForMinutes is untouched and still feeds the Codex provider -------
-assert.equal(labelForMinutes(300), "5h");
-assert.equal(labelForMinutes(10080), "wk");
-assert.equal(labelForMinutes(1440), "1d");
-assert.equal(labelForMinutes(45), "45m");
-assert.equal(labelForMinutes(0), null);
 
 console.log("PASS: lib/windows.mjs countdown labelling");

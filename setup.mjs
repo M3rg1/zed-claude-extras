@@ -3,7 +3,6 @@
  *
  *   node setup.mjs                      # show what to add, and where
  *   node setup.mjs --write              # add it, backing settings.json up first
- *   node setup.mjs --provider codex     # the Codex entry instead
  *   node setup.mjs --name "Claude"      # override the agent's display name
  *
  * Every path in the printed entry is resolved here rather than typed by hand,

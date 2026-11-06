@@ -5,7 +5,7 @@ rem Zed ships its own node in a version-stamped directory
 rem (%LOCALAPPDATA%\Zed\node\node-v24.11.0-win-x64) which is replaced whenever
 rem Zed upgrades node, so resolving it here rather than writing it into
 rem settings.json keeps that setting from going stale. Any arguments are passed
-rem through to proxy.mjs, e.g. --provider codex.
+rem through to proxy.mjs.
 setlocal
 
 set "NODE_BIN="

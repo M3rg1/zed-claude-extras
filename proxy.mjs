@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * ACP stdio proxy: Zed <--> proxy.mjs <--> <agent>-acp adapter.
+ * ACP stdio proxy: Zed <--> proxy.mjs <--> claude-acp adapter.
  *
  * Appends a read-only usage selector to the session's config options and relays
  * everything else verbatim. A provider decides which agent to wrap and where the
  * numbers come from (see providers/README.md).
  *
- *   node proxy.mjs [--provider codex]
+ *   node proxy.mjs [--provider <id>]
  */
 
 import { spawn } from "node:child_process";

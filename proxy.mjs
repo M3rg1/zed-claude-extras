@@ -24,6 +24,7 @@ import {
 } from "./lib/cache.mjs";
 import { AgentLogReader, agentForValue, agentLogMarkdown, agentMapOption } from "./lib/agent-map.mjs";
 import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
+import { SubagentFilter } from "./lib/subagents.mjs";
 import { cacheLeft, cacheTtlMs } from "./lib/prompt-cache.mjs";
 import { zedCli } from "./lib/resolve.mjs";
 import { usageOption } from "./lib/usage-item.mjs";
@@ -94,6 +95,9 @@ const COMMAND_MAX = resolveCommandMax(process.env.ZED_AGENT_USAGE_COMMAND_MAX);
 const COMMAND_SUMMARY = off(process.env.ZED_AGENT_USAGE_COMMAND_SUMMARY ?? "on")
   ? null
   : new CommandSummary(COMMAND_MAX);
+const SUBAGENT_FILTER = off(process.env.ZED_AGENT_USAGE_HIDE_SUBAGENTS ?? "on")
+  ? null
+  : new SubagentFilter();
 
 /** Goes in front of every thread title. Zed gives all custom agents the same
  *  generic icon and has no setting for it, so the title is the one place in the
@@ -494,9 +498,15 @@ function transform(message) {
     };
   }
 
-  if (message?.method === "session/request_permission" && COMMAND_SUMMARY && message.params?.toolCall) {
+  if (
+    message?.method === "session/request_permission" &&
+    (COMMAND_SUMMARY || SUBAGENT_FILTER) &&
+    message.params?.toolCall
+  ) {
     finishCommandCard(message.params.sessionId);
-    const toolCall = COMMAND_SUMMARY.approve(message.params.toolCall);
+    let toolCall = message.params.toolCall;
+    if (SUBAGENT_FILTER) toolCall = SUBAGENT_FILTER.approve(toolCall);
+    if (COMMAND_SUMMARY) toolCall = COMMAND_SUMMARY.approve(toolCall);
     return { ...message, params: { ...message.params, toolCall } };
   }
 
@@ -504,6 +514,9 @@ function transform(message) {
   const sessionId = message.params?.sessionId;
   const update = message.params?.update;
   if (!sessionId || !update) return message;
+
+  // Before the summary card, so a subagent's work neither shows nor splits it.
+  if (SUBAGENT_FILTER?.hides(update)) return null;
 
   // Only session/update is rewritten: session/request_permission keeps the whole
   // command, so what the user approves is never cut short.

@@ -18,7 +18,7 @@ const CASES = [
   { sessionUpdate: "session_info_update", title: `${PREFIX} Already labelled` },
   { sessionUpdate: "session_info_update", title: null },
   { sessionUpdate: "session_info_update" },
-  { sessionUpdate: "tool_call", toolCallId: "read_1", title: "Read a file", kind: "read" },
+  { sessionUpdate: "tool_call", toolCallId: "edit_1", title: "Edit a file", kind: "edit" },
 ].map((update, i) => ({ ...update, _meta: { case: i } }));
 
 /** Run one proxy until every case has come back, and return what Zed would see:
@@ -86,7 +86,7 @@ assert.equal(on.seen.get(0).updatedAt, "2026-11-06T10:00:00Z", "other fields are
 assert.equal(on.seen.get(1).title, "🔑 Already labelled", "a title sent back is not doubled");
 assert.equal(on.seen.get(2).title, null, "clearing the title still clears it");
 assert.equal("title" in on.seen.get(3), false, "an update without a title must not gain one");
-assert.equal(on.seen.get(4).title, "Read a file", "a tool call's title is not a thread title");
+assert.equal(on.seen.get(4).title, "Edit a file", "a tool call's title is not a thread title");
 
 // A prefix with spaces around it reads the same.
 const padded = await run({ ZED_AGENT_USAGE_TITLE_PREFIX: `  ${PREFIX} ` });

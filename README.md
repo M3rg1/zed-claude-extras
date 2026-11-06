@@ -156,26 +156,41 @@ Zed then renders only what is left, plus the usage. To find the ids, start with
 A hidden selector can no longer be changed from the panel, so pin the value you
 want in `default_config_options` first.
 
-## One card for shell commands
+## One card for commands and lookups
 
-Zed draws a card per shell command, each with the command in full, so a long turn
-fills the thread. The proxy shows one card for each unbroken run of commands instead:
+Zed draws a card per shell command, each with the command in full, and one per file
+read, grep and glob, so a long turn fills the thread. The proxy shows one card for
+each unbroken run of them instead:
 
 ```
-Ran 18 commands · last: sed -n 70,130p scripts/check-banned
+Ran 18 commands, 6 lookups · last: sed -n 70,130p scripts/check-banned
 ```
 
-Zed can't move a card, so a message or another tool's card finishes the current one,
-and the next command starts a new one at the bottom. Claude's thoughts don't, since
-they fall between most commands.
+Lookups are folded in with the commands because they come between them so often
+that a card of their own would split nearly every run. The card keeps the hammer
+icon whatever it holds.
 
-This changes the display only: the agent runs the real commands, and they stay in
-the agent's own logs. Failed commands are hidden like the others. A command awaiting
-approval keeps its own card, with the whole command in the prompt. Other tools, such
-as file reads and edits, keep their cards.
+Zed can't move a card, so a message or another tool's card, such as an edit,
+finishes the current one, and the next command or lookup starts a new one at the
+bottom. Claude's thoughts don't, since they fall between most commands.
 
-With the summary off, each command gets its card back, with its label cut to 80
-characters. That label's copy button copies the short version.
+This changes the display only: the agent makes the real calls, and they stay in the
+agent's own logs. Failed ones are hidden like the others. A read's card no longer
+links to its file. A call awaiting approval keeps its own card, with the whole
+command in the prompt. Other tools, such as edits and web fetches, keep their cards.
+
+With the summary off, each command and lookup gets its card back, with a command's
+label cut to 80 characters. That label's copy button copies the short version.
+
+## Subagents' work hidden
+
+Zed draws a subagent's tool calls in the thread as if the main agent made them, so
+a few reviewers reading a long diff fill it. The proxy hides everything a subagent
+reports: the Claude adapter marks it with the Agent call that started the subagent.
+The [agent map](#agent-map) still lists each subagent and opens its log.
+
+A subagent's call that needs your approval still shows, with its own card. To see
+subagents' work in the thread again, set `ZED_AGENT_USAGE_HIDE_SUBAGENTS=off`.
 
 ## Prompt cache estimate
 
@@ -249,7 +264,8 @@ The prefix goes on the titles the agent sends, so:
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
 | `ZED_AGENT_USAGE_LAST_ACTIVITY` | on | `off` removes the last-activity item |
 | `ZED_AGENT_USAGE_PROMPT_CACHE` | on | `off` removes the prompt cache estimate |
-| `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command its own card again |
+| `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command and lookup its own card again |
+| `ZED_AGENT_USAGE_HIDE_SUBAGENTS` | on | `off` shows subagents' tool calls in the thread again |
 | `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
 | `ZED_AGENT_USAGE_AGENT_MAP` | on | `off` removes the agent map |
 | `ZED_AGENT_USAGE_AGENT_MAP_MS` | `15000` | How often the agent map checks for changes |
@@ -274,6 +290,7 @@ providers/                one file per agent
 lib/windows.mjs           countdown labelling
 lib/cache.mjs             snapshot + activity record shared between proxies
 lib/commands.mjs          the summary card and shortened command labels
+lib/subagents.mjs         hiding subagents' work
 lib/prompt-cache.mjs      the prompt cache estimate
 lib/agent-map.mjs         the agent map and its readable logs
 lib/usage-item.mjs        the usage item and its dropdown

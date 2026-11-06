@@ -53,9 +53,35 @@ process.stdin.on("data", (chunk) => {
 
       const chunk = (sessionUpdate) =>
         toolUpdate({ sessionUpdate, content: { type: "text", text: "words" } });
+      // What a subagent reports carries the Agent call that started it.
+      const fromSubagent = { _meta: { claudeCode: { parentToolUseId: `agent_${turn}` } } };
 
       report(1);
       finish(1, "completed");
+      toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: `grep_${turn}`,
+        title: 'grep "needle" src',
+        kind: "search",
+        status: "pending",
+      });
+      toolUpdate({ sessionUpdate: "tool_call_update", toolCallId: `grep_${turn}`, status: "completed" });
+      // A subagent's work, a message among it: none of it should show or end the card.
+      toolUpdate({ ...bash(9), toolCallId: `sub_bash_${turn}`, sessionUpdate: "tool_call", ...fromSubagent });
+      toolUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "subagent words" },
+        ...fromSubagent,
+      });
+      // A later report can lack the stamp; the call stays hidden.
+      toolUpdate({ sessionUpdate: "tool_call_update", toolCallId: `sub_bash_${turn}`, status: "completed" });
+      toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: `sub_edit_${turn}`,
+        title: "Edit sub.txt",
+        kind: "edit",
+        ...fromSubagent,
+      });
       report(4);
       chunk("agent_thought_chunk");
       report(5);
@@ -67,6 +93,13 @@ process.stdin.on("data", (chunk) => {
         toolCallId: `read_${turn}`,
         title: `Read ${"long/".repeat(40)}`,
         kind: "read",
+        status: "pending",
+      });
+      toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: `edit_${turn}`,
+        title: "Edit notes.txt",
+        kind: "edit",
         status: "pending",
       });
       report(3);
@@ -82,6 +115,26 @@ process.stdin.on("data", (chunk) => {
         },
       });
       toolUpdate({ ...bash(3), sessionUpdate: "tool_call_update", status: "completed" });
+      // A subagent's call that needs approval: the user still sees it, and its card.
+      toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: `sub_read_${turn}`,
+        title: "Read ../secret.txt",
+        kind: "read",
+        ...fromSubagent,
+      });
+      send({
+        jsonrpc: "2.0",
+        id: 950 + turn,
+        method: "session/request_permission",
+        params: { sessionId, toolCall: { toolCallId: `sub_read_${turn}` }, options: [] },
+      });
+      toolUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: `sub_read_${turn}`,
+        status: "completed",
+        ...fromSubagent,
+      });
       send({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
       continue;
     }

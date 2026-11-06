@@ -13,10 +13,6 @@ ACP proxy that adds to Claude threads in Zed's agent panel:
 Bypass Permissions   Opus (1M context)   Xhigh   Usage · 42m   28 Aug, 11:39
 ```
 
-<img width="696" height="130" alt="image" src="https://github.com/user-attachments/assets/7e41e3f0-ad1e-4a21-bec2-0159c3485904" />
-<img width="697" height="131" alt="image" src="https://github.com/user-attachments/assets/a3cb0758-029b-49d9-96e8-c6dfc5e3c648" />
-<img width="200" height="215" alt="image" src="https://github.com/user-attachments/assets/bba88290-8201-4f0b-8754-4d336acb1440" />
-
 ## Setup
 
 No dependencies; reuses the Claude adapter and node Zed has downloaded.

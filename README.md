@@ -87,8 +87,10 @@ early eviction; main conversation only.
 
 ## Last activity
 
-The thread's last turn as a date and time; Zed's thread list shows only a relative
-age. Survives a reopen.
+An item after Usage showing when the thread was last worked in, as `06 Nov, 23:28`
+in the system's locale; Zed's thread list shows only a relative age (`9m`). Taken
+from the turns the proxy relays and the `updatedAt` of Zed's thread list, so a
+reopened thread has it. `ZED_AGENT_USAGE_LAST_ACTIVITY=off` removes it.
 
 ## Hiding selectors
 

@@ -2,6 +2,7 @@
  *  the data behind `/usage`. The SDK authenticates itself and no model call is
  *  made, so no credentials are handled and no quota is used. */
 
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { expandPaths, firstExisting, resolveNodeAdapter, zedPaths } from "../lib/resolve.mjs";
@@ -29,6 +30,15 @@ function idlePrompt() {
       await new Promise(() => {});
     },
   };
+}
+
+/** The first file or folder under some project's folder that matches `segments`.
+ *  Claude Code files a session under a folder named after its project. Searching by
+ *  session id saves copying how it encodes paths, and finds a session started in a
+ *  worktree too. */
+function inAnyProject(segments) {
+  const config = process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), ".claude");
+  return firstExisting(expandPaths(path.join(config, "projects"), ["*", ...segments]));
 }
 
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -100,12 +110,29 @@ export default {
     });
   },
 
-  /** Claude Code files a session under a folder named after its project. Searching
-   *  by session id saves copying how it encodes paths, and finds a session started
-   *  in a worktree too. */
   agentLogDir(sessionId) {
-    const config = process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), ".claude");
-    return firstExisting(expandPaths(path.join(config, "projects"), ["*", sessionId, "subagents"]));
+    return inAnyProject([sessionId, "subagents"]);
+  },
+
+  /** When the session's last reply was written, from its transcript. Only replies
+   *  count, as they're what refreshes the cache: reopening a thread adds lines too. */
+  async lastTurnAt(sessionId) {
+    const file = inAnyProject([`${sessionId}.jsonl`]);
+    if (!file) return null;
+    const lines = (await readFile(file, "utf8")).split("\n");
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      // Cheap check first: a long thread's lines are large, and most aren't replies.
+      if (!lines[i].includes('"assistant"')) continue;
+      let entry;
+      try {
+        entry = JSON.parse(lines[i]);
+      } catch {
+        continue; // half-written
+      }
+      const at = entry.type === "assistant" ? Date.parse(entry.timestamp) : NaN;
+      if (Number.isFinite(at)) return at;
+    }
+    return null;
   },
 
   async fetchUsage({ cwd = process.cwd(), timeoutMs = 20_000 } = {}) {

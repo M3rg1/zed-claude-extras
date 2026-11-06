@@ -28,6 +28,12 @@ export default {
   cacheId() {
     return process.env.ZED_AGENT_USAGE_FAKE_CACHE_ID ?? "fake";
   },
+  async lastTurnAt() {
+    const minutesAgo = process.env.ZED_AGENT_USAGE_FAKE_LAST_TURN;
+    if (minutesAgo === undefined) return null;
+    if (minutesAgo === "fail") throw new Error("stub transcript failing on purpose");
+    return Date.now() - Number(minutesAgo) * 60_000;
+  },
   agentLogDir() {
     return process.env.ZED_AGENT_USAGE_FAKE_AGENTS_DIR ?? null;
   },

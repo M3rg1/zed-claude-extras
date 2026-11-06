@@ -184,8 +184,8 @@ The usage item also shows how long a thread's prompt cache has left, as `42m` or
 to be written to the cache again. A new thread starts cold.
 
 Nothing reports this live, so it's an estimate: a countdown from the end of the
-last turn, or for a reopened thread from when Zed's thread list says it last moved.
-With no record of a reopened thread, it shows nothing until its next turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
+last turn, which for a reopened thread comes from its transcript. Without a
+transcript, it shows nothing until the thread's next turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
 set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL` says otherwise. It doesn't read the
 `promptCacheTtl` setting, notice compaction or see the cache dropped early, and it
 covers the main conversation only, not subagents.

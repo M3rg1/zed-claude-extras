@@ -48,6 +48,7 @@ node test/real.mjs myagent      # handshake against the real adapter
 | `resolveAdapter()` | `{command, args}`, absolute `command`; `resolveNode()` gives you one |
 | `fetchUsage()` | Resolves to `{available, planType, windows}` |
 | `windows[]` | `{label, name?, usedPercent, resetsAt}`; `label` is short (`5h`, `wk`), `name` is what the dropdown calls it and defaults to `label` |
+| `lastTurnAt(sessionId)` | Optional. Epoch ms of the session's last reply, or null; gives a reopened thread its cache estimate |
 | `cacheId()` | Optional. Names the kind of billing, where limits depend on it, so threads billed differently don't share a snapshot; defaults to `id` |
 | `agentLogDir(sessionId)` | Optional. The folder of a session's subagent logs, or null; without it there is no agent map |
 

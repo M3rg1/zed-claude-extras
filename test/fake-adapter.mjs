@@ -86,12 +86,6 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
-    if (msg.method === "session/list") {
-      const sessions = JSON.parse(process.env.ZED_AGENT_USAGE_FAKE_SESSIONS ?? "[]");
-      send({ jsonrpc: "2.0", id: msg.id, result: { sessions } });
-      continue;
-    }
-
     if (msg.method === "session/load") {
       // Note the absent sessionId: LoadSessionResponse has no such field.
       send({

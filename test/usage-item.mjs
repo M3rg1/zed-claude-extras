@@ -4,7 +4,7 @@
  *    node test/usage-item.mjs */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -192,26 +192,47 @@ assert.equal(shown(apiItem), "cache cold", "an API thread doesn't get the subscr
 const again = await lastItem({ ...subscription, ZED_AGENT_USAGE_FAKE_UNAVAILABLE: "1" }, newThread, hasLimits);
 assert.equal(shown(again), "Usage · cold", "the same billing still shares, and the API thread left it alone");
 
-// A reopened thread: Zed's thread list says when it last moved.
+// A reopened thread: its transcript says when its last turn ended.
 const reopen = (minutesAgo) => ({
   ZED_AGENT_USAGE_CACHE: "off",
-  ZED_AGENT_USAGE_LAST_ACTIVITY: "off",
-  ZED_AGENT_USAGE_FAKE_SESSIONS: JSON.stringify(
-    minutesAgo === null
-      ? []
-      : [{ sessionId: "old_thread", updatedAt: new Date(Date.now() - minutesAgo * 60_000).toISOString() }],
-  ),
+  ...(minutesAgo === null ? {} : { ZED_AGENT_USAGE_FAKE_LAST_TURN: String(minutesAgo) }),
 });
-const openOld = (send) => {
-  send({ jsonrpc: "2.0", id: 5, method: "session/list", params: {} });
+const openOld = (send) =>
   send({ jsonrpc: "2.0", id: 6, method: "session/load", params: { sessionId: "old_thread", cwd: ".", mcpServers: [] } });
-};
-const hasFigures = (item) => shown(item).includes("Usage");
-const recent = await lastItem(reopen(10), openOld, (item) => hasFigures(item) && shown(item).includes("·"));
-assert.equal(shown(recent), "Usage · 50m", "ten minutes ago, on an hour's cache");
-const longAgo = await lastItem(reopen(120), openOld, (item) => hasFigures(item) && shown(item).includes("·"));
-assert.equal(shown(longAgo), "Usage · cold", "two hours ago, on an hour's cache");
-const unknown = await lastItem(reopen(null), openOld, hasFigures);
-assert.equal(shown(unknown), "Usage", "no record of the thread: no guess");
+const settled = (item) => shown(item).includes("Usage") && shown(item).includes("·");
+assert.equal(shown(await lastItem(reopen(10), openOld, settled)), "Usage · 50m", "ten minutes ago, on an hour's cache");
+assert.equal(shown(await lastItem(reopen(120), openOld, settled)), "Usage · cold", "two hours ago, on an hour's cache");
+assert.equal(
+  shown(await lastItem({ ...reopen(120), ZED_AGENT_USAGE_FAKE_UNAVAILABLE: "1" }, openOld, (i) => shown(i) === "cache cold")),
+  "cache cold",
+  "an old API thread shows its cache, the only thing it has",
+);
+assert.equal(shown(await lastItem(reopen(null), openOld, (i) => shown(i).includes("Usage"))), "Usage", "no transcript: no guess");
+assert.equal(shown(await lastItem(reopen("fail"), openOld, (i) => shown(i).includes("Usage"))), "Usage", "an unreadable one neither");
+
+// Finding that time in a real transcript's shape.
+const configDir = path.join(scratch, "claude-config");
+const projectDir = path.join(configDir, "projects", "C--Somewhere");
+mkdirSync(projectDir, { recursive: true });
+const transcript = (id, lines) =>
+  writeFileSync(path.join(projectDir, `${id}.jsonl`), lines.map((l) => (typeof l === "string" ? l : JSON.stringify(l))).join("\n"));
+const T1 = "2026-11-06T10:00:00.000Z";
+const T2 = "2026-11-06T10:05:00.000Z";
+const T3 = "2026-11-06T10:06:00.000Z";
+transcript("ended", [
+  { type: "user", timestamp: T1 },
+  { type: "assistant", timestamp: T1 },
+  { type: "assistant", timestamp: T2 },
+  { type: "attachment", timestamp: T3, about: "assistant" },
+  // What reopening a thread adds: no message, and no time.
+  { type: "cost-state", sessionId: "ended" },
+  { type: "session-owner", sessionId: "ended" },
+  '{"type":"assistant","timestamp":"cut off mid-wri',
+]);
+transcript("no-reply", [{ type: "user", timestamp: T1 }]);
+process.env.CLAUDE_CONFIG_DIR = configDir;
+assert.equal(await claude.lastTurnAt("ended"), Date.parse(T2), "the last reply, not what came after it");
+assert.equal(await claude.lastTurnAt("no-reply"), null, "no reply, nothing cached by it");
+assert.equal(await claude.lastTurnAt("missing"), null, "no transcript");
 
 console.log("PASS: the usage item stays short, lists every limit and keeps billing apart");

@@ -225,12 +225,19 @@ function usageItem(sessionId) {
   });
 }
 
-/** Records when a thread last moved, as far as Zed's thread list knows, so a reopened
- *  thread has a cache estimate before its next turn. It can't see the cache itself,
- *  and anything else that moved the thread counts too. */
-function noteThreadMoved(sessionId, at) {
-  const turn = promptCacheTurns.get(sessionId);
-  if (!turn?.running && at > (turn?.endedAt ?? 0)) promptCacheTurns.set(sessionId, { running: false, endedAt: at });
+/** Gives a reopened thread a cache estimate before its next turn, from when the agent's
+ *  own record says its last turn ended. A thread with no record shows none. */
+async function recallLastTurn(sessionId) {
+  if (PROMPT_CACHE_TTL_MS === null || !provider.lastTurnAt) return;
+  try {
+    const at = await provider.lastTurnAt(sessionId);
+    const turn = promptCacheTurns.get(sessionId);
+    if (!at || turn?.running || at <= (turn?.endedAt ?? 0)) return;
+    promptCacheTurns.set(sessionId, { running: false, endedAt: at });
+    renderSelectors();
+  } catch (err) {
+    log(`reading the last turn failed: ${err?.message || err}`);
+  }
 }
 
 /** Absolute date and time, since "9m ago" is what we are trying to improve on. */
@@ -462,11 +469,8 @@ function transform(message) {
   if (Array.isArray(message?.result?.sessions)) {
     for (const info of message.result.sessions) {
       const at = info?.updatedAt ? Date.parse(info.updatedAt) : NaN;
-      if (!info?.sessionId || !Number.isFinite(at)) continue;
-      noteActivity(info.sessionId, at);
-      noteThreadMoved(info.sessionId, at);
+      if (info?.sessionId && Number.isFinite(at)) noteActivity(info.sessionId, at);
     }
-    renderSelectors();
   }
 
   // Config options arrive on the session/new and session/load responses.
@@ -479,6 +483,7 @@ function transform(message) {
     if (sessionId && !answered && !promptCacheTurns.has(sessionId)) {
       promptCacheTurns.set(sessionId, { running: false, endedAt: 0 });
     }
+    if (sessionId && answered) void recallLastTurn(sessionId);
     log(`config options: ${configOptions.map((o) => o?.id).join(", ")}`);
     // Startup fetch failed or has not landed: retry so the label arrives now.
     if (!usage) void refreshUsage({ reason: "session start" });

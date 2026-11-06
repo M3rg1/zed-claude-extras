@@ -26,13 +26,15 @@ const times = new TurnTimes(clock);
 const started = times.start(7, "s1", T0);
 assert.deepEqual(started, {
   sessionId: "s1",
-  update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "*Sent 23:41*\n\n" } },
+  update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "\n\n*Sent 23:41*\n\n" } },
 }, "a line of its own, as text: Zed draws every card with an icon");
 assert.equal(times.end({ id: 99, result: { stopReason: "end_turn" } }, T0), null, "a response to anything else");
 const done = times.end({ id: 7, result: { stopReason: "end_turn" } }, T0 + 372_000);
 assert.equal(done.sessionId, "s1");
 assert.equal(done.update.sessionUpdate, "agent_message_chunk");
-assert.equal(done.update.content.text, "\n\n*Done 23:47 · 6m 12s*", "on a line of its own after the reply");
+// Blank lines on both sides: Zed adds a turn Claude starts itself to the same message as
+// the turn before, and two lines that touched would read "*Done …**Woke …*".
+assert.equal(done.update.content.text, "\n\n*Done 23:47 · 6m 12s*\n\n", "on a line of its own after the reply");
 assert.equal(times.end({ id: 7, result: { stopReason: "end_turn" } }, T0), null, "a turn ends once");
 
 const endOf = (response) => {
@@ -56,7 +58,7 @@ assert.equal(own.observe("s1", { sessionUpdate: "tool_call_update", toolCallId: 
 assert.equal(own.observe("s1", { sessionUpdate: "available_commands_update" }, T0), null);
 assert.equal(own.turnResult("s1", result, T0), null, "no turn of its own to end");
 const woke = own.observe("s1", chunk("woke"), T0);
-assert.deepEqual(woke, { sessionId: "s1", update: chunk("*Woke 23:41*\n\n") }, "before its first output");
+assert.deepEqual(woke, { sessionId: "s1", update: chunk("\n\n*Woke 23:41*\n\n") }, "before its first output");
 assert.equal(own.observe("s1", chunk("more"), T0), null, "once a turn");
 assert.equal(own.observe("s2", { sessionUpdate: "tool_call", toolCallId: "t" }, T0) && "s2", "s2", "each thread");
 assert.equal(own.turnResult("s1", { sessionUpdate: "usage_update", used: 1, size: 2 }, T0), null,
@@ -145,14 +147,14 @@ const shown = await runTurn({});
 const blank = (x) => x.text.replace(/\d.*\*/, "…*");
 // The stand-in adapter says "working" as a thread opens, before any prompt: to the proxy,
 // a turn Claude started itself, and one that never reports its result.
-const startAt = shown.findIndex((x) => /^\*Sent /.test(x.text ?? ""));
+const startAt = shown.findIndex((x) => /\*Sent /.test(x.text ?? ""));
 assert.ok(startAt >= 0, "a line at the start");
-assert.deepEqual(shown.slice(0, startAt).map(blank), ["*Woke …*\n\n", "working"], "Claude's own turn first");
+assert.deepEqual(shown.slice(0, startAt).map(blank), ["\n\n*Woke …*\n\n", "working"], "Claude's own turn first");
 const first = shown[startAt];
 const last = shown.at(-2);
-assert.match(first.text, /^\*Sent \d.*\*\n\n$/, "the turn's first line");
+assert.match(first.text, /^\n\n\*Sent \d.*\*\n\n$/, "the turn's first line");
 assert.equal(first.sessionId, "sess_test_1");
-assert.match(last.text, /^\n\n\*Done \d.* · \ds\*$/, "the last line before the turn ends");
+assert.match(last.text, /^\n\n\*Done \d.* · \ds\*\n\n$/, "the last line before the turn ends");
 assert.equal(last.sessionId, "sess_test_1");
 assert.equal(shown.at(-1), "response");
 const timeLines = (s) => s.filter((x) => /\*(Sent|Done) /.test(x.text ?? ""));
@@ -162,8 +164,8 @@ assert.equal(timeLines(shown).length, 2, "two lines a turn");
 // reply, with a line at each end.
 const woken = await runTurn({ ZED_AGENT_USAGE_FAKE_WAKE: "1" }, 500);
 const after = woken.slice(woken.indexOf("response") + 1).filter((x) => x.text !== undefined);
-assert.deepEqual(after.map(blank), ["*Woke …*\n\n", "woke", "\n\n*Done …*"], "Claude's own turn");
-assert.match(after[2].text, / · \ds\*$/, "with how long it took");
+assert.deepEqual(after.map(blank), ["\n\n*Woke …*\n\n", "woke", "\n\n*Done …*\n\n"], "Claude's own turn");
+assert.match(after[2].text, / · \ds\*\n\n$/, "with how long it took");
 
 const without = await runTurn({ ZED_AGENT_USAGE_TURN_TIMES: "off", ZED_AGENT_USAGE_FAKE_WAKE: "1" }, 500);
 assert.equal(without.filter((x) => /\*(Sent|Woke|Done) /.test(x.text ?? "")).length, 0, "off: no lines");

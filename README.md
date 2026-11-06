@@ -4,7 +4,7 @@ ACP proxy that adds to Claude threads in Zed's agent panel:
 
 - **Usage**: plan limits with reset countdowns, and the prompt cache's time left.
 - **Agent map**: the thread's subagents as a tree; each opens its log.
-- **Turn times**: a card when you send a message and one when Claude finishes.
+- **Turn times**: a line in the reply when you send a message and one when Claude finishes.
 - **Command card**: one card per run of shell commands and lookups.
 - **Hidden subagent work**: subagents' tool calls kept out of the thread.
 - **Title prefix**: a per-agent prefix on thread titles.
@@ -111,8 +111,9 @@ Ran 18 commands, 6 lookups · last: sed -n 70,130p scripts/check-banned
 
 ## Turn times
 
-Zed shows no times on messages. Each turn gets a card when you send it and one when
-it ends, with the time in the system's locale and how long the turn took:
+Zed shows no times on messages. Each reply starts with an italic line saying when you
+sent the message and ends with one saying when the turn ended and how long it took,
+in the system's locale:
 
 ```
 Sent 23:41
@@ -120,9 +121,11 @@ Sent 23:41
 Done 23:47 · 6m 12s
 ```
 
-The end card says `Stopped` for a cancelled turn, `Failed` for an error, and
-`Ended (<reason>)` for any other stop reason. Display only: Claude never sees them.
-New turns only: a reopened thread's earlier turns have none.
+Lines of text rather than cards, since Zed draws every card with an icon; copying a
+reply copies them too. The end line says `Stopped` for a cancelled turn, `Failed` for
+an error, and `Ended (<reason>)` for any other stop reason. Display only: Claude never
+sees them. Only turns you start get them: a turn Claude starts itself, e.g. when a
+background task wakes it, has none, and neither do a reopened thread's earlier turns.
 `ZED_AGENT_USAGE_TURN_TIMES=off` removes them.
 
 ## Hidden subagent work
@@ -188,7 +191,7 @@ Set in the agent entry's `env` block in `settings.json`.
 | `ZED_AGENT_USAGE_IDLE_AFTER_MS` | `600000` | No turns for this long: stop refreshing |
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
 | `ZED_AGENT_USAGE_PROMPT_CACHE` | on | `off` removes the prompt cache estimate |
-| `ZED_AGENT_USAGE_TURN_TIMES` | on | `off` removes the cards at the start and end of each turn |
+| `ZED_AGENT_USAGE_TURN_TIMES` | on | `off` removes the lines at the start and end of each turn's reply |
 | `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command and lookup its own card again |
 | `ZED_AGENT_USAGE_HIDE_SUBAGENTS` | on | `off` shows subagents' tool calls in the thread again |
 | `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
@@ -213,7 +216,7 @@ providers/claude.mjs          the usage source and the Claude Code log paths
 lib/windows.mjs               countdown labelling
 lib/cache.mjs                 the usage snapshot shared between proxies
 lib/commands.mjs              the summary card and shortened command labels
-lib/turn-times.mjs            the cards at the start and end of each turn
+lib/turn-times.mjs            the lines at the start and end of each turn's reply
 lib/subagents.mjs             hiding subagents' work
 lib/prompt-cache.mjs          the prompt cache estimate
 lib/agent-map.mjs             the agent map and its readable logs

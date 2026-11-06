@@ -145,6 +145,15 @@ Zed then renders only what is left, plus the usage. To find the ids, start with
 A hidden selector can no longer be changed from the panel, so pin the value you
 want in `default_config_options` first.
 
+## Shorter command labels
+
+Zed draws a shell command in full, however long, even with its output collapsed.
+The proxy cuts the command in the card's label to 80 characters. This changes the
+display only: the agent runs the real command, and an approval prompt shows all of
+it. A command you approved may stay in full afterwards. A command that ran without
+a prompt can't be read in full in the panel, and its copy button copies the short
+version.
+
 ## Config
 
 | Env var | Default | Purpose |
@@ -159,6 +168,7 @@ want in `default_config_options` first.
 | `ZED_AGENT_USAGE_IDLE_AFTER_MS` | `600000` | No turns for this long: stop refreshing |
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
 | `ZED_AGENT_USAGE_LAST_ACTIVITY` | on | `off` removes the last-activity item |
+| `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command label, in characters; `off` shows commands in full |
 | `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot and activity record live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
 | `ZED_AGENT_USAGE_PROVIDER` | `claude` | Provider, if `--provider` is not passed |
@@ -177,6 +187,7 @@ bin/zed-agent-usage[.cmd] what Zed spawns; finds node at run time
 providers/                one file per agent
 lib/windows.mjs           countdown labelling
 lib/cache.mjs             snapshot + activity record shared between proxies
+lib/commands.mjs          shortening command labels
 lib/resolve.mjs           finding node and Zed's installed binaries
 lib/jsonc.mjs             comment-preserving settings.json edits
 ```

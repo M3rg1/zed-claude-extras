@@ -19,6 +19,7 @@ import {
   writeCache,
   writeSessionActivity,
 } from "./lib/cache.mjs";
+import { resolveCommandMax, shortenCommand } from "./lib/commands.mjs";
 import {
   clampPercent,
   describeWindows,
@@ -79,6 +80,8 @@ const MARKER = (() => {
 /** Percentage above which MARKER appears, 0-100. 0 warns at any usage, 100
  *  never does. */
 const MARKER_AT = clampPercent(process.env.ZED_AGENT_USAGE_MARKER_AT, 90);
+
+const COMMAND_MAX = resolveCommandMax(process.env.ZED_AGENT_USAGE_COMMAND_MAX);
 
 const log = (msg) => {
   if (DEBUG) process.stderr.write(`[agent-usage] ${msg}\n`);
@@ -393,6 +396,18 @@ function transform(message) {
   const sessionId = message.params?.sessionId;
   const update = message.params?.update;
   if (!sessionId || !update) return message;
+
+  // Only session/update is rewritten: session/request_permission keeps the whole
+  // command, so what the user approves is never cut short.
+  if (COMMAND_MAX !== null && update.kind === "execute" && typeof update.title === "string") {
+    return {
+      ...message,
+      params: {
+        ...message.params,
+        update: { ...update, title: shortenCommand(update.title, COMMAND_MAX) },
+      },
+    };
+  }
 
   // Re-inject when the adapter republishes its set, e.g. after a mode switch.
   if (update.sessionUpdate === "config_option_update") {

@@ -26,6 +26,33 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
+    // Tool calls shaped like the real Claude adapter's: the shell command is the
+    // title, and later reports repeat the title and the kind.
+    if (msg.method === "session/prompt") {
+      const sessionId = msg.params.sessionId;
+      const command = `echo ${"long ".repeat(40)}`;
+      const toolUpdate = (update) =>
+        send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
+      const bash = { toolCallId: "bash_1", title: command, kind: "execute" };
+      toolUpdate({ ...bash, sessionUpdate: "tool_call", status: "pending", rawInput: { command } });
+      toolUpdate({ ...bash, sessionUpdate: "tool_call_update", rawInput: { command } });
+      toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "read_1",
+        title: `Read ${"long/".repeat(40)}`,
+        kind: "read",
+        status: "pending",
+      });
+      send({
+        jsonrpc: "2.0",
+        id: 900,
+        method: "session/request_permission",
+        params: { sessionId, toolCall: { ...bash, rawInput: { command } }, options: [] },
+      });
+      send({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
+      continue;
+    }
+
     if (msg.method === "session/load") {
       // Note the absent sessionId: LoadSessionResponse has no such field.
       send({

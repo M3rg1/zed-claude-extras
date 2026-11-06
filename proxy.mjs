@@ -176,13 +176,14 @@ let fetchedAt = 0;
 let failures = 0;
 /** Last sign of someone actually working in this proxy. */
 let lastTurnAt = Date.now();
-/** Last published usage items, so fetch and render tick share one "did it change?". */
-let lastPublishedUsage = null;
 /** Timer that re-reads usage just after a window rolls over. */
 let resetTimer = null;
 /** sessionId -> the adapter's own options, so each render starts from a clean
  *  set rather than appending to its own output. */
 const rawConfigOptions = new Map();
+/** sessionId -> the set Zed last got, as JSON. Zed rebuilds a thread's whole row on
+ *  any update, closing a menu open in it, so a thread is only sent a set that changed. */
+const publishedSets = new Map();
 /** Request id -> sessionId, for responses that omit it. `session/load` carries
  *  the id only in the request, so a resumed thread would otherwise never be
  *  registered here and its label would freeze at whatever it loaded with. */
@@ -253,30 +254,33 @@ function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
-/** Zed only re-reads the label when the set is republished. This also covers a
- *  cold start, where session/new beats the first fetch. */
-function republishConfigOptions() {
-  for (const [sessionId, configOptions] of rawConfigOptions) {
-    send({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        sessionId,
-        update: {
-          sessionUpdate: "config_option_update",
-          configOptions: withOwnOptions(configOptions, sessionId),
-        },
-      },
-    });
-  }
+/** `sessionId`'s full set, noted as what Zed now has. */
+function setForZed(sessionId, configOptions) {
+  const set = withOwnOptions(configOptions, sessionId);
+  publishedSets.set(sessionId, JSON.stringify(set));
+  return set;
 }
 
-/** Publish only when an item actually changed. */
+/** Sends `sessionId` its set if it differs from what Zed has, or always with `force`.
+ *  Zed only re-reads an item when the set is sent again. */
+function publishSession(sessionId, { force = false } = {}) {
+  const configOptions = rawConfigOptions.get(sessionId);
+  if (!configOptions) return;
+  if (!force && publishedSets.get(sessionId) === JSON.stringify(withOwnOptions(configOptions, sessionId))) return;
+  send({
+    jsonrpc: "2.0",
+    method: "session/update",
+    params: {
+      sessionId,
+      update: { sessionUpdate: "config_option_update", configOptions: setForZed(sessionId, configOptions) },
+    },
+  });
+}
+
+/** Sends each open thread its set, where it changed. This also covers a cold start,
+ *  where session/new beats the first fetch. */
 function renderSelectors() {
-  const next = JSON.stringify([...rawConfigOptions.keys()].map(usageItem));
-  if (next === lastPublishedUsage) return;
-  lastPublishedUsage = next;
-  republishConfigOptions();
+  for (const sessionId of rawConfigOptions.keys()) publishSession(sessionId);
 }
 
 /** Re-reads each open thread's subagent logs, telling Zed only if a row changed. */
@@ -284,15 +288,11 @@ async function refreshAgentMaps() {
   if (!SHOW_AGENT_MAP || !provider.agentLogDir || readingAgents) return;
   readingAgents = true;
   try {
-    let changed = false;
     for (const sessionId of rawConfigOptions.keys()) {
       const dir = provider.agentLogDir(sessionId);
-      const agents = dir ? await agentLogReader.read(dir, Date.now()) : [];
-      const before = JSON.stringify(agentMapOption(sessionAgents.get(sessionId)));
-      sessionAgents.set(sessionId, agents);
-      changed ||= before !== JSON.stringify(agentMapOption(agents));
+      sessionAgents.set(sessionId, dir ? await agentLogReader.read(dir, Date.now()) : []);
     }
-    if (changed) republishConfigOptions();
+    renderSelectors();
   } catch (err) {
     log(`reading subagent logs failed: ${err?.message || err}`);
   } finally {
@@ -441,7 +441,10 @@ function transform(message) {
     void refreshAgentMaps();
     return {
       ...message,
-      result: { ...message.result, configOptions: withOwnOptions(configOptions, sessionId) },
+      result: {
+        ...message.result,
+        configOptions: sessionId ? setForZed(sessionId, configOptions) : withOwnOptions(configOptions, sessionId),
+      },
     };
   }
 
@@ -481,7 +484,7 @@ function transform(message) {
       ...message,
       params: {
         ...message.params,
-        update: { ...update, configOptions: withOwnOptions(update.configOptions, sessionId) },
+        update: { ...update, configOptions: setForZed(sessionId, update.configOptions) },
       },
     };
   }
@@ -538,6 +541,7 @@ function interceptFromClient(message) {
   if (message?.method === "session/close" || message?.method === "session/delete") {
     const gone = message.params?.sessionId;
     if (gone && rawConfigOptions.delete(gone)) log(`forgot session ${gone}`);
+    if (gone) publishedSets.delete(gone);
     if (gone) promptCacheTurns.delete(gone);
     if (gone) sessionAgents.delete(gone);
   }
@@ -554,8 +558,9 @@ function interceptFromClient(message) {
     });
   }
   if (message.params.configId === AGENT_MAP_OPTION_ID) void openAgentLog(sessionId, message.params.value);
-  // Zed may already show the clicked row as selected; this puts the summary back.
-  republishConfigOptions();
+  // Zed may already show the clicked row as selected; this puts the summary back,
+  // and only in the clicked thread.
+  publishSession(sessionId, { force: true });
   return true;
 }
 

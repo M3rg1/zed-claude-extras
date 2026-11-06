@@ -38,6 +38,10 @@ ACP reserves the `_` prefix) to the session's config options, which Zed renders 
 selectors, answers `session/set_config_option` for them itself, and passes
 everything else through.
 
+Zed rebuilds a thread's whole selector row on every update, which closes any menu
+open in it, and nothing tells the proxy a menu is open. So a thread is sent its
+set only when that set changed.
+
 Usage fetches (settings named without their `ZED_AGENT_USAGE_` prefix):
 
 - Triggered by session start, turn start, turn end and window resets, not a clock.

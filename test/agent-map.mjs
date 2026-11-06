@@ -445,6 +445,30 @@ await throughProxy(
   },
 );
 
+// Zed rebuilds a thread's whole row on any update, closing a menu open in it, so a
+// thread is sent its set only when that set changed.
+const perThread = path.join(scratch, "per-thread", "<session>");
+const setsFor = (seen, sessionId) =>
+  seen.filter((m) => m.params?.update?.sessionUpdate === "config_option_update" && m.params.sessionId === sessionId)
+    .length;
+await throughProxy({ ZED_AGENT_USAGE_FAKE_AGENTS_DIR: perThread }, async ({ seen, send, until }) => {
+  await until((m) => m.id === 2, "the first thread");
+  send({ jsonrpc: "2.0", id: 3, method: "session/new", params: { cwd: "." } });
+  await until((m) => m.id === 3, "the second thread");
+  await pause(500); // startup's own publishing settles
+  const firstBefore = setsFor(seen, "sess_test_1");
+  const secondBefore = setsFor(seen, "sess_test_2");
+  writeAgent(perThread.replace("<session>", "sess_test_2"), "x", {
+    meta: { description: "In the second thread" },
+    lines: [{ type: "user", timestamp: new Date().toISOString(), message: { role: "user", content: "Go." } }],
+    modifiedAt: Date.now(),
+  });
+  await until((m) => m.params?.sessionId === "sess_test_2" && mapIn(m), "the second thread's map");
+  await pause(500);
+  assert.equal(setsFor(seen, "sess_test_1"), firstBefore, "a thread whose set is the same gets nothing");
+  assert.equal(setsFor(seen, "sess_test_2"), secondBefore + 1, "the changed thread gets it once");
+});
+
 await throughProxy({}, async ({ seen, until }) => {
   await until((m) => m.id === 2, "the session");
   await pause(500);

@@ -34,8 +34,9 @@ export default {
     if (minutesAgo === "fail") throw new Error("stub transcript failing on purpose");
     return Date.now() - Number(minutesAgo) * 60_000;
   },
-  agentLogDir() {
-    return process.env.ZED_AGENT_USAGE_FAKE_AGENTS_DIR ?? null;
+  /** `<session>` in the folder stands for the session id, for a log folder per thread. */
+  agentLogDir(sessionId) {
+    return process.env.ZED_AGENT_USAGE_FAKE_AGENTS_DIR?.replace("<session>", sessionId) ?? null;
   },
   async fetchUsage() {
     // Lets a test drive the failure path that puts "?" on the label. "after-first"

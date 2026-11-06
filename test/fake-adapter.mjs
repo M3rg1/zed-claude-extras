@@ -4,6 +4,7 @@ const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`);
 
 let buffer = "";
 let turn = 0;
+let sessions = 0;
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   buffer += chunk;
@@ -160,7 +161,8 @@ process.stdin.on("data", (chunk) => {
     }
 
     if (msg.method === "session/new") {
-      const sessionId = "sess_test_1";
+      sessions += 1;
+      const sessionId = `sess_test_${sessions}`;
       // Both real adapters return config options here; "effort" is the one the
       // stub provider nominates, "model" is a control that must stay untouched.
       send({

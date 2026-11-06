@@ -1,15 +1,81 @@
 # zed-agent-usage
 
-Shows your Claude or Codex plan usage in Zed's agent panel, counting down to each
-window's reset.
+ACP proxy that adds to Zed's agent panel, for Claude and Codex threads:
 
-It adds one read-only item to the selector row at the bottom of a thread:
+- **Usage**: plan limits with reset countdowns, and the prompt cache's time left.
+- **Last activity**: when the thread was last worked in, as a date and time.
+- **Agent map** (Claude): the thread's subagents as a tree; each opens its log.
+- **Command card**: one card per run of shell commands and lookups.
+- **Hidden subagent work**: subagents' tool calls kept out of the thread.
+- **Title prefix**: a per-agent prefix on thread titles.
 
 ```
 Bypass Permissions   Opus (1M context)   Xhigh   Usage · 42m   28 Aug, 11:39
 ```
 
-Click `Usage` to see every limit your plan has and when it resets:
+<img width="696" height="130" alt="image" src="https://github.com/user-attachments/assets/7e41e3f0-ad1e-4a21-bec2-0159c3485904" />
+<img width="697" height="131" alt="image" src="https://github.com/user-attachments/assets/a3cb0758-029b-49d9-96e8-c6dfc5e3c648" />
+<img width="200" height="215" alt="image" src="https://github.com/user-attachments/assets/bba88290-8201-4f0b-8754-4d336acb1440" />
+
+## Setup
+
+No dependencies; reuses the adapters and node Zed has downloaded.
+
+```sh
+node setup.mjs                            # dry run: what it writes, and where
+node setup.mjs --write                    # write it; backs up settings.json first
+node setup.mjs --provider codex --write   # Codex
+```
+
+Then pick **Claude + usage** in the agent panel. Existing `claude-acp` / `codex-acp`
+entries are left as they are.
+
+For setup by a coding agent:
+`https://raw.githubusercontent.com/ortwinvanderstappen/zed-agent-usage/main/agent-instructions.md`
+
+Settings are read at startup and the proxy is long-lived: restart the agent after
+changing settings or updating this repo.
+
+## How it works
+
+```
+Zed  <--stdio-->  proxy.mjs  <--stdio-->  <agent>-acp adapter
+```
+
+Zed extensions have no UI. The proxy appends its own entries (`_usage`,
+`_lastActivity`, `_agentMap`; ACP reserves the `_` prefix) to the session's config
+options, which Zed renders as selectors, answers `session/set_config_option` for
+them itself, and passes everything else through.
+
+Usage fetches (settings named without their `ZED_AGENT_USAGE_` prefix):
+
+- Triggered by session start, turn start, turn end and window resets, not a clock.
+- At most once per `MIN_AGE_MS`, machine-wide; at least once per `MAX_AGE_MS` while
+  in use.
+- None after `IDLE_AFTER_MS` without a turn; window resets still fire.
+- The label is re-rendered from cache every `RENDER_MS`, for the countdown.
+- Proxies (one per Zed window) share a snapshot file in the temp dir; a lock elects
+  one to fetch.
+- `session/load` responses omit the session id; the proxy maps them back to the
+  request.
+- Archived and closed threads are dropped.
+- After `STALE_AFTER` failed reads in a row the label shows `?`, and the tooltip the
+  data's age.
+
+## Where the numbers come from
+
+No credentials handled, no model calls, no quota used; each provider runs a
+subprocess that authenticates itself.
+
+- **Claude**: the Agent SDK's `get_usage` control request (the data behind
+  `/usage`). Experimental upstream; isolated in `providers/claude.mjs`.
+- **Codex**: `codex app-server` → `account/rateLimits/read`.
+
+A new provider is one file: [providers/README.md](providers/README.md).
+
+## Usage item
+
+Click for every limit; hover a row for the exact reset time:
 
 ```
 5-hour: 11% · resets in 4h
@@ -18,242 +84,100 @@ Fable: 9% · resets in 3d
 Prompt cache: 42m left
 ```
 
-`42m` is how long the thread's prompt cache has left. Hover a row for the exact
-reset time. With API billing there are no plan limits, so the item only shows the
-cache, as `cache 5m`. The second item is when the thread was last worked in —
-Zed's thread list only shows that relatively ("9m"), which is no help on
-returning to a thread days later.
+With API billing there are no plan limits; the item shows the cache only, as
+`cache 5m`.
 
-Either item can be switched off in the agent's `env` block:
-`ZED_AGENT_USAGE_LAST_ACTIVITY=off` drops the timestamp,
-`ZED_AGENT_USAGE_MARKER=off` the warning marker.
+**Warning marker.** Above `ZED_AGENT_USAGE_MARKER_AT` (default 90) percent on any
+limit, per-model ones included, the label gets `ZED_AGENT_USAGE_MARKER` (default
+🔴): `🔴 Usage · 42m`. ACP has no colour or severity field, hence an emoji. `0`
+shows it always; `off` or `100` never. Out-of-range values are clamped, unparseable
+ones fall back to 90. `ZED_AGENT_USAGE_DEBUG=1` logs the threshold in effect.
 
-<img width="696" height="130" alt="image" src="https://github.com/user-attachments/assets/7e41e3f0-ad1e-4a21-bec2-0159c3485904" />
-<img width="697" height="131" alt="image" src="https://github.com/user-attachments/assets/a3cb0758-029b-49d9-96e8-c6dfc5e3c648" />
-<img width="200" height="215" alt="image" src="https://github.com/user-attachments/assets/bba88290-8201-4f0b-8754-4d336acb1440" />
+**Prompt cache estimate.** `42m` or `cold`. A countdown from the end of the last
+turn; for a reopened thread, from its transcript, and without one nothing until the
+next turn. TTL: 1 hour on a subscription, 5 minutes with `ANTHROPIC_API_KEY`, or
+`CLAUDE_CODE_PROMPT_CACHE_TTL`. Ignores the `promptCacheTtl` setting, compaction and
+early eviction; main conversation only.
 
-## Setup
+## Last activity
 
-Nothing to install — no dependencies, and it reuses the adapters and node that
-Zed already downloaded.
-
-```sh
-node setup.mjs            # show what it will write, and where
-node setup.mjs --write    # write it, backing up settings.json first
-```
-
-Then pick **Claude + usage** in Zed's agent panel picker. For Codex too:
-`node setup.mjs --provider codex --write`.
-
-Your existing `claude-acp` / `codex-acp` entries keep working, so you can switch
-back any time.
-
-**Or hand this link to your coding agent and let it do the setup:**
-
-```
-https://raw.githubusercontent.com/ortwinvanderstappen/zed-agent-usage/main/agent-instructions.md
-```
-
-## How it works
-
-Zed extensions have no UI at all, so this is a stdio proxy in the ACP connection:
-
-```
-Zed  <--stdio-->  proxy.mjs  <--stdio-->  <agent>-acp adapter
-```
-
-Zed renders one selector per entry in the session's config-option set, and
-nothing says that set may only hold the adapter's own. So the proxy appends one
-of its own (`_usage`; ACP reserves the `_` prefix for custom use) and passes
-everything else through untouched. Clicking it would make Zed ask the adapter to
-set an option it has never heard of, so the proxy answers that request itself.
-
-Usage only moves when a turn runs, so fetches are triggered by turns rather than
-by the clock: session start, turn start, turn end, and just after a window
-resets. `MIN_AGE` is the floor — however many chats fire triggers, a real fetch
-happens at most that often. `MAX_AGE` is the ceiling while you are working.
-
-Leave Zed idle for ten minutes and it stops refreshing altogether: turn start is
-a trigger, so the figures are re-read the moment you type, and window resets
-still fire. Archived and closed threads are forgotten rather than re-rendered
-forever. The `?` marker means reads are *failing*, not that we chose to idle. In between, the label is re-rendered from
-cache every 30s so the countdown stays current without fetching.
-
-Reopening a thread goes through `session/load`, whose response omits the session
-id, so the proxy correlates it back to the request that carried one — otherwise a
-resumed thread would sit frozen at the figures it loaded with.
-
-Zed runs one proxy per window, and they share one snapshot through a file in the
-temp dir, so N windows cost one fetch rather than N. Freshness alone is not
-enough for that: proxies started together would all miss the cache and all fetch
-at once, so a lock elects one to do the work while the others wait for its
-result. Ten chats cannot multiply the cost. If reads start failing,
-the label gains a `?` and the tooltip says how old the numbers are, rather than
-showing figures that have quietly stopped moving.
-
-## Where the numbers come from
-
-No credentials are handled and no model calls are made, so no quota is used —
-both providers delegate to a subprocess that authenticates itself.
-
-- **Claude** — the Agent SDK's `get_usage` control request, the data behind
-  `/usage`. It is marked experimental upstream; if renamed,
-  `providers/claude.mjs` is the only place to change.
-- **Codex** — `codex app-server` → `account/rateLimits/read`.
-
-Adding another agent is one file: see [providers/README.md](providers/README.md).
-
-## Warning marker
-
-Above 90% on any limit, including a per-model one, the item gains a red marker.
-Click it to see which limit it is:
-
-```
-Usage · 42m      ->      🔴 Usage · 42m
-```
-
-Below that there is no marker — in a row of plain text, it appearing is the
-signal. An emoji is used because ACP has no colour or severity field; the label
-is a plain string Zed paints with your theme.
-
-The threshold is yours to set — any percentage from 0 to 100. Add an `env` block
-to the agent entry in `settings.json`:
-
-```json
-"env": {
-  "ZED_AGENT_USAGE_MARKER_AT": "75",
-  "ZED_AGENT_USAGE_MARKER": "🔴"
-}
-```
-
-| Want | Set |
-| --- | --- |
-| Warn earlier | `ZED_AGENT_USAGE_MARKER_AT=75` |
-| See it right now | `ZED_AGENT_USAGE_MARKER_AT=0` |
-| Never | `ZED_AGENT_USAGE_MARKER=off` (or `MARKER_AT=100`) |
-| A different glyph | `ZED_AGENT_USAGE_MARKER=⚠️` |
-
-Out-of-range values are clamped and unparseable ones fall back to 90, so a typo
-cannot quietly switch the warning off. `ZED_AGENT_USAGE_DEBUG=1` logs the
-threshold actually in effect.
-
-Settings are read at startup, so restart the agent after editing.
+The thread's last turn as a date and time; Zed's thread list shows only a relative
+age. Survives a reopen.
 
 ## Hiding selectors
 
-That row gets busy. Any of the agent's own selectors can be dropped from it,
-which is useful for ones you have pinned in `settings.json` and never touch:
+`ZED_AGENT_USAGE_HIDE=mode,fast` drops the agent's own selectors from the row. Ids:
+Claude `mode`, `model`, `effort`, `fast`; Codex `mode`, `collaboration_mode`,
+`model`, `reasoning_effort`, `fast-mode`. `ZED_AGENT_USAGE_DEBUG=1` logs them
+(`config options:` in `dev: open acp logs`). A hidden selector can't be changed from
+the panel: pin it in `default_config_options` first.
 
-```json
-"env": { "ZED_AGENT_USAGE_HIDE": "mode,fast" }
-```
+## Command card
 
-Zed then renders only what is left, plus the usage. To find the ids, start with
-`ZED_AGENT_USAGE_DEBUG=1` and look for the `config options:` line in
-`dev: open acp logs` — Claude offers `mode`, `model`, `effort`, `fast`; Codex
-`mode`, `collaboration_mode`, `model`, `reasoning_effort`, `fast-mode`.
-
-A hidden selector can no longer be changed from the panel, so pin the value you
-want in `default_config_options` first.
-
-## One card for commands and lookups
-
-Zed draws a card per shell command, each with the command in full, and one per file
-read, grep and glob, so a long turn fills the thread. The proxy shows one card for
-each unbroken run of them instead:
+Each unbroken run of shell commands and lookups (read, grep, glob) is one card:
 
 ```
 Ran 18 commands, 6 lookups · last: sed -n 70,130p scripts/check-banned
 ```
 
-Lookups are folded in with the commands because they come between them so often
-that a card of their own would split nearly every run. The card keeps the hammer
-icon whatever it holds.
+- A message or another tool's card, such as an edit, ends the run; thoughts don't.
+- Display only: the calls run and are logged as usual. Failed calls are folded in
+  too. Read cards lose their file link. Calls awaiting approval keep their own card,
+  with the whole command. The card always has the hammer icon.
+- `ZED_AGENT_USAGE_COMMAND_SUMMARY=off`: one card per call again, command labels
+  cut to `ZED_AGENT_USAGE_COMMAND_MAX` characters; the copy button copies the cut
+  label.
 
-Zed can't move a card, so a message or another tool's card, such as an edit,
-finishes the current one, and the next command or lookup starts a new one at the
-bottom. Claude's thoughts don't, since they fall between most commands.
+## Hidden subagent work
 
-This changes the display only: the agent makes the real calls, and they stay in the
-agent's own logs. Failed ones are hidden like the others. A read's card no longer
-links to its file. A call awaiting approval keeps its own card, with the whole
-command in the prompt. Other tools, such as edits and web fetches, keep their cards.
-
-With the summary off, each command and lookup gets its card back, with a command's
-label cut to 80 characters. That label's copy button copies the short version.
-
-## Subagents' work hidden
-
-Zed draws a subagent's tool calls in the thread as if the main agent made them, so
-a few reviewers reading a long diff fill it. The proxy hides everything a subagent
-reports: the Claude adapter marks it with the Agent call that started the subagent.
-The [agent map](#agent-map) still lists each subagent and opens its log.
-
-A subagent's call that needs your approval still shows, with its own card. To see
-subagents' work in the thread again, set `ZED_AGENT_USAGE_HIDE_SUBAGENTS=off`.
-
-## Prompt cache estimate
-
-The usage item also shows how long a thread's prompt cache has left, as `42m` or
-`cold`. A cold cache makes your next message cost more, because the conversation has
-to be written to the cache again. A new thread starts cold.
-
-Nothing reports this live, so it's an estimate: a countdown from the end of the
-last turn, which for a reopened thread comes from its transcript. Without a
-transcript, it shows nothing until the thread's next turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
-set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL` says otherwise. It doesn't read the
-`promptCacheTtl` setting, notice compaction or see the cache dropped early, and it
-covers the main conversation only, not subagents.
+Zed draws a subagent's tool calls as the main agent's. The proxy drops every update
+the Claude adapter stamps with a parent tool call, except approval requests.
+`ZED_AGENT_USAGE_HIDE_SUBAGENTS=off` shows them again. The agent map still opens
+each subagent's log.
 
 ## Agent map
 
-Once a thread has spawned Claude subagents, the row gains an item such as
-`5 agents · 1 running`. Click it for a list, running ones first and then newest first,
-with each subagent's own subagents indented under it, at any depth:
+Claude only. Appears once a thread has subagents, as `5 agents · 1 running`. Click
+for the list: running first, then newest first, each subagent's own subagents
+indented under it:
 
 ```
 ● Implement Task 6 · 15m · 225k
 └ ● Summarize the… · 1m · 31k
- └ ○ Read AGENTS.md · 4s · 28k
+ └ ○ Read AGENTS.md · 4s · 28k
 ○ Re-review round 1 · 3m · 132k
 ○ Fix round 1 · 4m · 298k
 ```
 
-`●` is running, `○` is done, and `◌` means an unfinished subagent's log hasn't moved
-for over 30 minutes, so it was interrupted or is waiting on something long. Each row
-has its time so far and the size of its last reply, rounded and with long titles
-cut so they fit Zed's dropdown; the indent comes out of the title, so a row only
-runs past the dropdown's edge several levels deep. Hover for the full title, exact figures and type; pick one to open a readable copy of its log in Zed, with long tool results cut.
-That copy goes in the temp folder below and holds whatever the subagent read.
+- `●` running, `○` done, `◌` unfinished with no log writes for 30 minutes
+  (interrupted, or waiting on something long).
+- Figures: time so far, and the last reply's size (context plus output).
+- Titles are cut to fit Zed's row of about 34 characters; the indent comes out of
+  the title, so only rows several levels deep overflow.
+- Hover: full title, exact figures, type. Click: a readable copy of the log opens in
+  Zed, long tool results cut, written to `ZED_AGENT_USAGE_CACHE_DIR`.
 
-It's read from the logs Claude Code writes, every 15 seconds while a thread is in
-use, so it costs no quota. Zed draws only a flat list here, so the indent stands in
-for a tree. Claude Code only, as other agents have no such logs.
+Read from Claude Code's subagent logs (`<session>/subagents/agent-*.jsonl` and
+`.meta.json`) every `ZED_AGENT_USAGE_AGENT_MAP_MS` while the thread is in use. Claude
+Code nests subagents at most three deep.
 
-## Telling threads apart
+## Title prefix
 
-Zed gives all custom agents the same generic icon, and a running thread shows a
-spinner in its place, so the sidebar can't tell you which agent a thread runs on.
-A prefix for each agent's thread titles can:
+Zed gives every custom agent the same icon, so the sidebar can't tell agents apart.
+A per-agent title prefix can:
 
 ```json
 "Claude + API":   { "env": { "ZED_AGENT_USAGE_TITLE_PREFIX": "🔑" } },
 "Claude + usage": { "env": { "ZED_AGENT_USAGE_TITLE_PREFIX": "📊" } }
 ```
 
-```
-🔑 Fix the login timeout
-📊 Plan the release
-```
-
-The prefix goes on the titles the agent sends, so:
-
-- A new thread shows Zed's unprefixed preview until its title arrives.
-- An older thread gets the prefix once it's reopened.
-- A thread you rename yourself keeps your title as you typed it, because Zed then
-  ignores the agent's titles.
+It goes on titles the agent sends: a new thread shows Zed's unprefixed preview
+until its title arrives, an older thread gets it when reopened, and a thread renamed
+by hand keeps its name.
 
 ## Config
+
+Set in the agent entry's `env` block in `settings.json`.
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
@@ -286,7 +210,7 @@ The prefix goes on the titles the agent sends, so:
 ## Layout
 
 ```
-proxy.mjs                 ACP relay + the injected selector
+proxy.mjs                 ACP relay + the injected selectors
 setup.mjs                 writes this machine's Zed settings entry
 usage.mjs                 prints a provider's snapshot
 bin/zed-agent-usage[.cmd] what Zed spawns; finds node at run time
@@ -310,30 +234,16 @@ npm run usage             # live Claude snapshot (or: npm run usage:codex)
 npm run test:real         # against the real adapter, handshake only
 ```
 
-## Limitations
-
-- Zed has no icon option for custom agents, so proxied entries show a generic
-  icon rather than the Claude or OpenAI one. A
-  [title prefix](#telling-threads-apart) can tell them apart instead.
-- The proxy is long-lived: after updating this repo, restart the agent before
-  changes appear.
-
 ## Notes
 
-Two things that look like they should work, but don't:
-
-- Zed already receives `_meta["_claude/rateLimit"]` from the Claude adapter, but
-  ignores it — and it carries no percentage until you are past a warning
-  threshold anyway.
+- Zed has no icon option for custom agents; use a [title prefix](#title-prefix).
+- Zed receives `_meta["_claude/rateLimit"]` from the Claude adapter but ignores it,
+  and it has no percentage below a warning threshold.
 - `~/.claude/projects/*.jsonl` has token counts, not plan-limit percentages.
-
-Zed discussion [#54792](https://github.com/zed-industries/zed/discussions/54792)
-asks for this natively.
+- Zed discussion [#54792](https://github.com/zed-industries/zed/discussions/54792)
+  asks for usage natively.
 
 ## License
 
-[MIT](LICENSE) — free to use, modify and redistribute.
-
-Not affiliated with Anthropic, OpenAI or Zed Industries. Relies on interfaces
-that are internal or marked experimental, so it may break on any upstream
-release.
+[MIT](LICENSE). Not affiliated with Anthropic, OpenAI or Zed Industries. Relies on
+internal and experimental interfaces; may break on any upstream release.

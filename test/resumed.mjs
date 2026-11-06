@@ -47,7 +47,8 @@ child.stdout.on("data", (chunk) => {
     const opts = msg.result?.configOptions ?? update?.configOptions;
     if (!opts || (update && msg.params.sessionId !== RESUMED)) continue;
     const mine = opts.find((o) => o.id === "_usage");
-    const name = (mine?.options ?? []).find((v) => v.value === mine.currentValue)?.name;
+    // The countdown is in the dropdown's rows.
+    const name = (mine?.options ?? []).map((v) => v.name).join(" | ");
     if (name) labels.push(name);
   }
 });

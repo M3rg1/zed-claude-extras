@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheLabel, cacheTtlMs } from "../lib/prompt-cache.mjs";
+import { cacheLeft, cacheTtlMs } from "../lib/prompt-cache.mjs";
 import { launchArgv, testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,13 +21,13 @@ assert.equal(cacheTtlMs({ ANTHROPIC_API_KEY: "k", CLAUDE_CODE_PROMPT_CACHE_TTL: 
 assert.equal(cacheTtlMs({ CLAUDE_CODE_PROMPT_CACHE_TTL: "5m" }), FIVE_MINUTES);
 assert.equal(cacheTtlMs({ CLAUDE_CODE_PROMPT_CACHE_TTL: "2h" }), HOUR, "only known values count");
 
-assert.equal(cacheLabel(undefined, HOUR, 0), "", "unknown until a turn has run here");
-assert.equal(cacheLabel({ running: true, endedAt: 0 }, HOUR, HOUR * 5), "cache 60m", "full while running");
-assert.equal(cacheLabel({ running: false, endedAt: 0 }, HOUR, 0), "cache 60m");
-assert.equal(cacheLabel({ running: false, endedAt: 0 }, HOUR, 1), "cache 60m", "rounds up");
-assert.equal(cacheLabel({ running: false, endedAt: 0 }, HOUR, 18 * 60_000), "cache 42m");
-assert.equal(cacheLabel({ running: false, endedAt: 0 }, HOUR, HOUR), "cache cold", "out of time");
-assert.equal(cacheLabel({ running: false, endedAt: 0 }, FIVE_MINUTES, FIVE_MINUTES + 1), "cache cold");
+assert.equal(cacheLeft(undefined, HOUR, 0), "", "unknown with no record of the thread");
+assert.equal(cacheLeft({ running: true, endedAt: 0 }, HOUR, HOUR * 5), "60m", "full while running");
+assert.equal(cacheLeft({ running: false, endedAt: 0 }, HOUR, 0), "60m");
+assert.equal(cacheLeft({ running: false, endedAt: 0 }, HOUR, 1), "60m", "rounds up");
+assert.equal(cacheLeft({ running: false, endedAt: 0 }, HOUR, 18 * 60_000), "42m");
+assert.equal(cacheLeft({ running: false, endedAt: 0 }, HOUR, HOUR), "cold", "out of time");
+assert.equal(cacheLeft({ running: false, endedAt: 0 }, FIVE_MINUTES, FIVE_MINUTES + 1), "cold");
 
 // ---------------------------------------------------------------- through the proxy
 
@@ -89,18 +89,18 @@ function labelsAfterPrompt(env) {
 
 const subscription = await labelsAfterPrompt({});
 assert.ok(
-  subscription.beforePrompt.every((l) => !l.includes("cache")),
-  `no estimate before a turn has run: ${JSON.stringify(subscription.beforePrompt)}`,
+  subscription.beforePrompt.every((l) => l.endsWith("cold")),
+  `nothing is cached before a thread's first turn: ${JSON.stringify(subscription.beforePrompt)}`,
 );
-assert.equal(subscription.labels.at(-1), "5h 42% · wk 7% · cache 60m");
+assert.equal(subscription.labels.at(-1), "Usage · 60m");
 
 const api = await labelsAfterPrompt({ ANTHROPIC_API_KEY: "k" });
-assert.equal(api.labels.at(-1), "5h 42% · wk 7% · cache 5m");
+assert.equal(api.labels.at(-1), "Usage · 5m");
 
 const noUsage = await labelsAfterPrompt({ ANTHROPIC_API_KEY: "k", ZED_AGENT_USAGE_FAKE_UNAVAILABLE: "1" });
 assert.equal(noUsage.labels.at(-1), "cache 5m", "shown even without plan figures");
 
 const off = await labelsAfterPrompt({ ZED_AGENT_USAGE_PROMPT_CACHE: "off" });
-assert.ok(off.labels.every((l) => !l.includes("cache")), "off removes it");
+assert.ok(off.labels.every((l) => l === "Usage"), "off removes it");
 
 console.log("PASS: the usage item estimates the prompt cache's time left");

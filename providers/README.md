@@ -47,7 +47,8 @@ node test/real.mjs myagent      # handshake against the real adapter
 | `displayName` | Used in CLI output |
 | `resolveAdapter()` | `{command, args}`, absolute `command`; `resolveNode()` gives you one |
 | `fetchUsage()` | Resolves to `{available, planType, windows}` |
-| `windows[]` | `{label, usedPercent, resetsAt}`; `label` is short (`5h`, `wk`) |
+| `windows[]` | `{label, name?, usedPercent, resetsAt}`; `label` is short (`5h`, `wk`), `name` is what the dropdown calls it and defaults to `label` |
+| `cacheId()` | Optional. Names the kind of billing, where limits depend on it, so threads billed differently don't share a snapshot; defaults to `id` |
 | `agentLogDir(sessionId)` | Optional. The folder of a session's subagent logs, or null; without it there is no agent map |
 
 `windows` is an ordered list of any length, so an agent with one window, or
@@ -55,7 +56,7 @@ three, needs no special casing — order it shortest-first. Return
 `available: false` (or an empty `windows`) when plan limits don't apply, e.g. on
 API-key billing; the proxy then adds no selector at all.
 
-`resetsAt` is carried through for future use and is not currently rendered.
+`resetsAt` gives the countdown and reset time in the dropdown.
 
 ## Guidance
 

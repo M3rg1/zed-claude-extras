@@ -24,15 +24,10 @@ import {
 } from "./lib/cache.mjs";
 import { AgentLogReader, agentForValue, agentLogMarkdown, agentMapOption } from "./lib/agent-map.mjs";
 import { CommandSummary, resolveCommandMax, shortenTitle } from "./lib/commands.mjs";
-import { cacheLabel, cacheTtlMs } from "./lib/prompt-cache.mjs";
+import { cacheLeft, cacheTtlMs } from "./lib/prompt-cache.mjs";
 import { zedCli } from "./lib/resolve.mjs";
-import {
-  clampPercent,
-  describeWindows,
-  formatWindows,
-  maxUsedPercent,
-  msUntilNextReset,
-} from "./lib/windows.mjs";
+import { usageOption } from "./lib/usage-item.mjs";
+import { clampPercent, formatWindows, msUntilNextReset } from "./lib/windows.mjs";
 
 /** Usage only moves when a turn runs, so refreshes are triggered by turns --
  *  starting one and finishing one -- rather than by the clock.
@@ -170,6 +165,10 @@ for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 
 // ---------------------------------------------------------------- state
 
+/** Whose figures these are. A provider whose limits depend on how it's billed names
+ *  each kind, so threads billed differently don't read each other's snapshot. */
+const USAGE_CACHE_ID = provider.cacheId?.() ?? provider.id;
+
 /** Latest snapshot from the provider, or null until the first success. */
 let usage = null;
 let fetching = false;
@@ -179,8 +178,8 @@ let fetchedAt = 0;
 let failures = 0;
 /** Last sign of someone actually working in this proxy. */
 let lastTurnAt = Date.now();
-/** Last published label, so fetch and render tick share one "did it change?". */
-let lastSuffix = null;
+/** Last published usage items, so fetch and render tick share one "did it change?". */
+let lastPublishedUsage = null;
 /** Timer that re-reads usage just after a window rolls over. */
 let resetTimer = null;
 /** sessionId -> the adapter's own options, so each render starts from a clean
@@ -204,54 +203,34 @@ const sessionAgents = new Map();
 const agentLogReader = new AgentLogReader();
 let readingAgents = false;
 
-function suffix() {
-  return usage?.available ? formatWindows(usage.windows) : "";
-}
-
 /** Minutes since the snapshot was read, or null while reads are healthy. */
 function staleMinutes() {
   if (!fetchedAt || failures < STALE_AFTER_FAILURES) return null;
   return Math.floor((Date.now() - fetchedAt) / 60_000);
 }
 
-/** The label Zed shows: the windows, a marker when one is running out, and a
- *  "?" when the numbers have stopped being refreshed. */
-function promptCacheLabel(sessionId) {
+function promptCacheLeft(sessionId) {
   if (PROMPT_CACHE_TTL_MS === null) return "";
-  return cacheLabel(promptCacheTurns.get(sessionId), PROMPT_CACHE_TTL_MS, Date.now());
+  return cacheLeft(promptCacheTurns.get(sessionId), PROMPT_CACHE_TTL_MS, Date.now());
 }
 
-function usageLabel() {
-  const tail = suffix();
-  if (!tail) return "";
-  const label = tail.slice(3); // drop the leading " · "
-  const worst = maxUsedPercent(usage?.windows);
-  const warn = MARKER && worst != null && worst > MARKER_AT;
-  return `${warn ? `${MARKER} ` : ""}${label}${staleMinutes() == null ? "" : " ?"}`;
+function usageItem(sessionId) {
+  return usageOption({
+    windows: usage?.available ? usage.windows : [],
+    cacheLeft: promptCacheLeft(sessionId),
+    staleMinutes: staleMinutes(),
+    marker: MARKER,
+    markerAt: MARKER_AT,
+    now: Date.now(),
+  });
 }
 
-/** Our selector. Single-value so it reads as a label, and no `category` so Zed
- *  does not treat it as a model or mode picker. */
-function usageOption(sessionId) {
-  const cache = promptCacheLabel(sessionId);
-  const label = [usageLabel(), cache].filter(Boolean).join(" · ");
-  if (!label) return null;
-  const stale = staleMinutes();
-  const detail = [
-    describeWindows(usage?.windows),
-    stale == null ? null : `last read ${stale}m ago`,
-    cache ? "cache time is an estimate" : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return {
-    id: USAGE_OPTION_ID,
-    name: "Usage",
-    description: detail || "Plan usage",
-    type: "select",
-    currentValue: OWN_VALUE_ID,
-    options: [{ value: OWN_VALUE_ID, name: label, description: detail || undefined }],
-  };
+/** Records when a thread last moved, as far as Zed's thread list knows, so a reopened
+ *  thread has a cache estimate before its next turn. It can't see the cache itself,
+ *  and anything else that moved the thread counts too. */
+function noteThreadMoved(sessionId, at) {
+  const turn = promptCacheTurns.get(sessionId);
+  if (!turn?.running && at > (turn?.endedAt ?? 0)) promptCacheTurns.set(sessionId, { running: false, endedAt: at });
 }
 
 /** Absolute date and time, since "9m ago" is what we are trying to improve on. */
@@ -287,7 +266,7 @@ function withOwnOptions(configOptions, sessionId) {
   if (!Array.isArray(configOptions)) return configOptions;
   const kept = HIDDEN.size ? configOptions.filter((opt) => !HIDDEN.has(opt?.id)) : configOptions;
   const mine = [
-    usageOption(sessionId),
+    usageItem(sessionId),
     lastActivityOption(sessionId),
     agentMapOption(sessionAgents.get(sessionId)),
   ].filter(Boolean);
@@ -328,12 +307,11 @@ function republishConfigOptions() {
   }
 }
 
-/** Publish only when the rendered label actually changed. */
+/** Publish only when an item actually changed. */
 function renderSelectors() {
-  const cacheLabels = [...promptCacheTurns.keys()].map(promptCacheLabel).join();
-  const next = `${usageLabel()}|${cacheLabels}`;
-  if (next === lastSuffix) return;
-  lastSuffix = next;
+  const next = JSON.stringify([...rawConfigOptions.keys()].map(usageItem));
+  if (next === lastPublishedUsage) return;
+  lastPublishedUsage = next;
   republishConfigOptions();
 }
 
@@ -402,15 +380,15 @@ async function refreshUsage({ maxAge = MIN_AGE_MS, reason = "" } = {}) {
   if (fetching) return;
   fetching = true;
   try {
-    const shared = SHARING ? readCache(provider.id, maxAge) : null;
+    const shared = SHARING ? readCache(USAGE_CACHE_ID, maxAge) : null;
     if (shared) {
       adopt(shared, `${reason} (shared)`);
       return;
     }
 
-    let release = SHARING ? acquireFetchLock(provider.id) : () => {};
+    let release = SHARING ? acquireFetchLock(USAGE_CACHE_ID) : () => {};
     if (!release) {
-      const waited = await waitForCache(provider.id, MAX_AGE_MS);
+      const waited = await waitForCache(USAGE_CACHE_ID, MAX_AGE_MS);
       if (waited) {
         adopt(waited, `${reason} (published by another proxy)`);
         return;
@@ -424,7 +402,7 @@ async function refreshUsage({ maxAge = MIN_AGE_MS, reason = "" } = {}) {
     try {
       const next = await provider.fetchUsage();
       const snapshot = { fetchedAt: Date.now(), usage: next };
-      if (SHARING) writeCache(provider.id, snapshot);
+      if (SHARING) writeCache(USAGE_CACHE_ID, snapshot);
       adopt(snapshot, `${reason} (fetched)`);
     } finally {
       release();
@@ -484,8 +462,11 @@ function transform(message) {
   if (Array.isArray(message?.result?.sessions)) {
     for (const info of message.result.sessions) {
       const at = info?.updatedAt ? Date.parse(info.updatedAt) : NaN;
-      if (info?.sessionId && Number.isFinite(at)) noteActivity(info.sessionId, at);
+      if (!info?.sessionId || !Number.isFinite(at)) continue;
+      noteActivity(info.sessionId, at);
+      noteThreadMoved(info.sessionId, at);
     }
+    renderSelectors();
   }
 
   // Config options arrive on the session/new and session/load responses.
@@ -493,6 +474,11 @@ function transform(message) {
     const { configOptions } = message.result;
     const sessionId = message.result.sessionId ?? answered;
     if (sessionId) rawConfigOptions.set(sessionId, configOptions);
+    // A brand new thread: only session/new gets here with no session id in its request,
+    // and nothing is cached before its first turn.
+    if (sessionId && !answered && !promptCacheTurns.has(sessionId)) {
+      promptCacheTurns.set(sessionId, { running: false, endedAt: 0 });
+    }
     log(`config options: ${configOptions.map((o) => o?.id).join(", ")}`);
     // Startup fetch failed or has not landed: retry so the label arrives now.
     if (!usage) void refreshUsage({ reason: "session start" });
@@ -601,11 +587,9 @@ function interceptFromClient(message) {
       result: { configOptions: withOwnOptions(rawConfigOptions.get(sessionId) ?? [], sessionId) },
     });
   }
-  if (message.params.configId === AGENT_MAP_OPTION_ID) {
-    void openAgentLog(sessionId, message.params.value);
-    // Zed may already show the clicked row as selected; this puts the summary back.
-    republishConfigOptions();
-  }
+  if (message.params.configId === AGENT_MAP_OPTION_ID) void openAgentLog(sessionId, message.params.value);
+  // Zed may already show the clicked row as selected; this puts the summary back.
+  republishConfigOptions();
   return true;
 }
 

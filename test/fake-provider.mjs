@@ -25,6 +25,9 @@ export default {
   resolveAdapter() {
     return { command: process.execPath, args: [path.join(here, "fake-adapter.mjs")] };
   },
+  cacheId() {
+    return process.env.ZED_AGENT_USAGE_FAKE_CACHE_ID ?? "fake";
+  },
   agentLogDir() {
     return process.env.ZED_AGENT_USAGE_FAKE_AGENTS_DIR ?? null;
   },

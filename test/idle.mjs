@@ -91,6 +91,6 @@ const failing = await run({ ms: 9000, env: { ZED_AGENT_USAGE_FAKE_FAIL: "after-f
 console.log(`failing: labels ${JSON.stringify(failing.labels)}`);
 assert.ok(failing.labels.length >= 2, "expected the label to change once reads failed");
 assert.ok(!failing.labels[0].includes("?"), "the first, good read is not stale");
-assert.ok(failing.labels.at(-1).endsWith(" ?"), "failing reads must be admitted");
+assert.ok(failing.labels.at(-1).includes(" ?"), "failing reads must be admitted");
 
 console.log("PASS: idle stops fetching, work resumes it, failures are admitted");

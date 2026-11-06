@@ -54,9 +54,8 @@ console.log(`running: ${command} ${commandArgs.join(" ")}${mode ? ` (${mode})` :
 // 94 minutes out floors to "1h"; the weekly window stays above the 24h
 // threshold and keeps its static label.
 const EXPECTED =
-  `${marker && !markerOff ? "🔴 " : ""}` +
-  `${countdown ? "1h 42% · wk 7%" : "5h 42% · wk 7%"}` +
-  `${stale ? " ?" : ""}`;
+  `${marker && !markerOff ? "🔴 " : ""}Usage${stale ? " ?" : ""} · cold`;
+const EXPECTED_ROW = countdown ? "5h: 42% · resets in 1h" : "5h: 42%";
 
 const child = spawn(command, commandArgs, {
   stdio: ["pipe", "pipe", "inherit"],
@@ -85,6 +84,7 @@ const selectedName = (configOptions, id) => {
 };
 
 const usages = [];
+let rows = [];
 const efforts = [];
 const idSets = [];
 const titles = [];
@@ -107,6 +107,7 @@ child.stdout.on("data", (chunk) => {
       idSets.push(configOptions.map((o) => o.id));
       const mine = selectedName(configOptions, "_usage");
       if (mine) usages.push(mine);
+      rows = configOptions.find((o) => o.id === "_usage")?.options.map((o) => o.name) ?? rows;
       efforts.push(selectedName(configOptions, "effort"));
     }
     if (msg.method === "test/leaked") leaked = msg.params?.configId;
@@ -148,8 +149,12 @@ setTimeout(() => {
     console.error(`FAIL: expected an injected usage label equal to ${JSON.stringify(EXPECTED)}`);
     process.exit(1);
   }
+  if (!rows.includes(EXPECTED_ROW)) {
+    console.error(`FAIL: expected a row ${JSON.stringify(EXPECTED_ROW)} in ${JSON.stringify(rows)}`);
+    process.exit(1);
+  }
   // Re-rendering must rebuild from the adapter's own set, not stack copies.
-  const doubled = usages.find((l) => (l?.match(/%/g) ?? []).length > 2);
+  const doubled = usages.find((l) => (l?.match(/Usage/g) ?? []).length > 1);
   if (doubled) {
     console.error(`FAIL: usage label stacked: ${doubled}`);
     process.exit(1);

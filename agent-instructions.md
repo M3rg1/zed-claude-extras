@@ -48,7 +48,7 @@ credentials. If it errors, report the error rather than guessing.
 
 - Pick **Claude + usage** (or **Codex + usage**) in Zed's agent panel picker.
 - The usage appears as an extra item in the selector row at the bottom of a
-  thread, e.g. `4h 11% · wk 15%`, counting down to each window's reset.
+  thread, e.g. `Usage · 42m`. Clicking it lists each limit and when it resets.
 - Their existing `claude-acp` / `codex-acp` entries are untouched and still work.
 - The proxy is long-lived, so after any update to this repo the agent needs
   restarting (kill the `proxy.mjs` process, or restart Zed) before changes show.

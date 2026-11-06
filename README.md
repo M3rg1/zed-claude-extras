@@ -6,11 +6,21 @@ window's reset.
 It adds one read-only item to the selector row at the bottom of a thread:
 
 ```
-Bypass Permissions   Opus (1M context)   Xhigh   4h 11% · wk 15%   28 Aug, 11:39
+Bypass Permissions   Opus (1M context)   Xhigh   Usage · 42m   28 Aug, 11:39
 ```
 
-`4h 11%` means the 5-hour window is 11% used and resets in 4 hours. Hover for
-the exact reset times. The second item is when the thread was last worked in —
+Click `Usage` to see every limit your plan has and when it resets:
+
+```
+5-hour: 11% · resets in 4h
+Weekly: 15% · resets in 3d
+Weekly, Fable: 9% · resets in 3d
+Prompt cache: 42m left
+```
+
+`42m` is how long the thread's prompt cache has left. Hover a row for the exact
+reset time. With API billing there are no plan limits, so the item only shows the
+cache, as `cache 5m`. The second item is when the thread was last worked in —
 Zed's thread list only shows that relatively ("9m"), which is no help on
 returning to a thread days later.
 
@@ -95,10 +105,11 @@ Adding another agent is one file: see [providers/README.md](providers/README.md)
 
 ## Warning marker
 
-Above 90% on any window, the label gains a red marker:
+Above 90% on any limit, including a per-model one, the item gains a red marker.
+Click it to see which limit it is:
 
 ```
-22m 94% · wk 88%      ->      🔴 22m 94% · wk 88%
+Usage · 42m      ->      🔴 Usage · 42m
 ```
 
 Below that there is no marker — in a row of plain text, it appearing is the
@@ -168,12 +179,13 @@ characters. That label's copy button copies the short version.
 
 ## Prompt cache estimate
 
-Once a turn has run in a thread, the usage item also shows how long its prompt
-cache has left, as `cache 42m` or `cache cold`. A cold cache makes your next message
-cost more, because the conversation has to be written to the cache again.
+The usage item also shows how long a thread's prompt cache has left, as `42m` or
+`cold`. A cold cache makes your next message cost more, because the conversation has
+to be written to the cache again. A new thread starts cold.
 
 Nothing reports this live, so it's an estimate: a countdown from the end of the
-last turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
+last turn, or for a reopened thread from when Zed's thread list says it last moved.
+With no record of a reopened thread, it shows nothing until its next turn. It lasts an hour on a subscription and 5 minutes with `ANTHROPIC_API_KEY`
 set, unless `CLAUDE_CODE_PROMPT_CACHE_TTL` says otherwise. It doesn't read the
 `promptCacheTtl` setting, notice compaction or see the cache dropped early, and it
 covers the main conversation only, not subagents.
@@ -264,6 +276,7 @@ lib/cache.mjs             snapshot + activity record shared between proxies
 lib/commands.mjs          the summary card and shortened command labels
 lib/prompt-cache.mjs      the prompt cache estimate
 lib/agent-map.mjs         the agent map and its readable logs
+lib/usage-item.mjs        the usage item and its dropdown
 lib/resolve.mjs           finding node and Zed's installed binaries
 lib/jsonc.mjs             comment-preserving settings.json edits
 ```

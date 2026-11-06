@@ -53,7 +53,10 @@ function limitNames(limit, hasFiveHour) {
   if (group === "session" && hasFiveHour) names = { name: "5-hour", label: "5h" };
   const surface = limit.scope?.surface;
   const scope = limit.scope?.model?.display_name ?? (typeof surface === "string" ? surface : surface?.display_name);
-  return scope ? { name: `${names.name}, ${scope}`, label: `${names.label} ${scope}` } : names;
+  if (!scope) return names;
+  // Weekly is the usual window for a limit on one model, so the model alone says it.
+  if (group === "weekly") return { name: scope, label: scope };
+  return { name: `${names.name}, ${scope}`, label: `${names.label} ${scope}` };
 }
 
 /** The two usual limits from their named fields, for when the general list is missing:

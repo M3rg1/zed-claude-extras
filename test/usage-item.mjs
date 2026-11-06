@@ -24,7 +24,7 @@ const inHours = (hours) => new Date(NOW + hours * 3_600_000).toISOString();
 const windows = [
   { label: "5h", name: "5-hour", usedPercent: 23, resetsAt: inHours(2.5) },
   { label: "wk", name: "Weekly", usedPercent: 98, resetsAt: inHours(9.2) },
-  { label: "wk Fable", name: "Weekly, Fable", usedPercent: 9, resetsAt: inHours(9.2) },
+  { label: "Fable", name: "Fable", usedPercent: 9, resetsAt: inHours(9.2) },
 ];
 const base = { windows, cacheLeft: "60m", staleMinutes: null, marker: "🔴", markerAt: 90, now: NOW };
 const names = (option) => option.options.map((o) => o.name);
@@ -36,7 +36,7 @@ assert.deepEqual(names(option), [
   "🔴 Usage · 60m",
   "5-hour: 23% · resets in 2h",
   "Weekly: 98% · resets in 9h",
-  "Weekly, Fable: 9% · resets in 9h",
+  "Fable: 9% · resets in 9h",
   "Prompt cache: 60m left",
 ]);
 assert.equal(new Set(option.options.map((o) => o.value)).size, 5, "values are unique");
@@ -85,6 +85,13 @@ const reported = {
       resets_at: inHours(9.2),
       scope: { model: { display_name: "Fable", id: null }, surface: null },
     },
+    {
+      kind: "session_scoped",
+      group: "session",
+      percent: 12,
+      resets_at: inHours(2.5),
+      scope: { model: { display_name: "Fable", id: null }, surface: null },
+    },
     { kind: "monthly_all", group: "monthly_spend", percent: 40, resets_at: null, scope: null },
     { kind: "weekly_scoped", group: "weekly", percent: null, resets_at: null, scope: null },
   ],
@@ -94,7 +101,8 @@ assert.deepEqual(
   [
     ["5-hour", "5h", 23],
     ["Weekly", "wk", 98],
-    ["Weekly, Fable", "wk Fable", 9],
+    ["Fable", "Fable", 9],
+    ["5-hour, Fable", "5h Fable", 12],
     ["Monthly spend", "monthly spend", 40],
   ],
   "every limit, whatever its kind, and none without a figure",

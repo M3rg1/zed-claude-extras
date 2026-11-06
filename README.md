@@ -14,7 +14,7 @@ Click `Usage` to see every limit your plan has and when it resets:
 ```
 5-hour: 11% · resets in 4h
 Weekly: 15% · resets in 3d
-Weekly, Fable: 9% · resets in 3d
+Fable: 9% · resets in 3d
 Prompt cache: 42m left
 ```
 

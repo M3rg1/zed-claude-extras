@@ -52,15 +52,11 @@ Usage fetches (settings named without their `ZED_AGENT_USAGE_` prefix):
 - After `STALE_AFTER` failed reads in a row the label shows `?`, and the tooltip the
   data's age.
 
-## Where the numbers come from
-
-The Agent SDK's `get_usage` control request (the data behind `/usage`), run in a
-subprocess that authenticates itself: no credentials handled, no model calls, no
-quota used. Experimental upstream; isolated in `providers/claude.mjs`.
-
 ## Usage item
 
-Click for every limit; hover a row for the exact reset time:
+Read with the Agent SDK's `get_usage` control request, the data behind `/usage`: no
+model calls, no quota used. Click for every limit; hover a row for the exact reset
+time:
 
 ```
 5-hour: 11% · resets in 4h

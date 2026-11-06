@@ -184,15 +184,15 @@ Once a thread has spawned Claude subagents, the row gains an item such as
 `5 agents · 1 running`. Click it for a list, running ones first and then newest first:
 
 ```
-● Implement Task 6 · 15m 6s · 225.2k
-○ Re-review round 1 · 3m 24s · 132.4k
-○ Fix round 1 · 4m 2s · 297.7k
+● Implement Task 6 · 15m · 225k
+○ Re-review round 1 · 3m · 132k
+○ Fix round 1 · 4m · 298k
 ```
 
 `●` is running, `○` is done, and `◌` means an unfinished subagent's log hasn't moved
 for over 30 minutes, so it was interrupted or is waiting on something long. Each row
-has its time so far and the size of its last reply. Hover for the full title and
-type; pick one to open a readable copy of its log in Zed, with long tool results cut.
+has its time so far and the size of its last reply, rounded and with long titles
+cut so they fit Zed's dropdown. Hover for the full title, exact figures and type; pick one to open a readable copy of its log in Zed, with long tool results cut.
 That copy goes in the temp folder below and holds whatever the subagent read.
 
 It's read from the logs Claude Code writes, every 15 seconds while a thread is in

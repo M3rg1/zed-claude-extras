@@ -127,8 +127,9 @@ const names = option.options.map((o) => o.name);
 const shown = option.options.find((o) => o.value === option.currentValue);
 assert.equal(shown.name, "4 agents · 1 running", "the row shows the summary, not one agent");
 assert.equal(new Set(option.options.map((o) => o.value)).size, option.options.length, "values are unique");
-assert.equal(names[1], "● Implement Task 6 · 1m 0s · 950");
-assert.equal(names[2], "○ Review the change · 1m 23s · 80.3k");
+assert.equal(names[1], "● Implement Task 6 · 1m · 950");
+assert.equal(names[2], "○ Review the change · 1m · 80.3k");
+assert.match(option.options[2].description, /1m 23s · 80\.3k tokens/, "the hover keeps the exact figures");
 assert.match(option.options[2].description, /playbook:reviewer/);
 assert.match(option.options[2].description, /Review the change/);
 assert.equal(names[4], "◌ Fix round 1", "gone quiet has its own mark, and zero figures stay out");
@@ -141,8 +142,17 @@ assert.equal(agentMapOption(agents.slice(1, 2)).options[0].name, "1 agent");
 const long = agentMapOption([
   { ...byId.done, description: "Implement Task 5: UI content and event wiring" },
 ]).options[1];
-assert.equal(long.name, "○ Implement Task 5: UI content… · 1m 23s · 80.3k", "a long title leaves room for the figures");
+assert.equal(long.name, "○ Implement Task 5:… · 1m · 80.3k", "a long title gives way to the figures");
 assert.match(long.description, /Implement Task 5: UI content and event wiring/, "the hover keeps it whole");
+
+// Zed cuts a row at about 35 characters, so the figures have to fit inside that,
+// however large they get.
+const biggest = agentMapOption([
+  { ...byId.done, description: "Implement Task 13: A mutation run on the branch", seconds: 6533, tokens: 252_200 },
+]).options[1];
+assert.equal(biggest.name, "○ Implement Task 13… · 108m · 252k");
+assert.match(biggest.description, /108m 53s · 252\.2k tokens/);
+assert.ok(Array.from(biggest.name).length <= 34, `too wide for Zed: ${biggest.name}`);
 
 // ---------------------------------------------------------------- the log view
 
@@ -255,7 +265,7 @@ const clickEnv = { ZED_AGENT_USAGE_FAKE_AGENTS_DIR: threadDir, ZED_AGENT_USAGE_F
 
 await throughProxy(clickEnv, async ({ seen, send, until }) => {
   await until((m) => mapIn(m), "the item to appear");
-  assert.equal(lastMap(seen).options[1].name, "○ Review the change · 1m 23s · 80.3k");
+  assert.equal(lastMap(seen).options[1].name, "○ Review the change · 1m · 80.3k");
 
   // A new subagent shows up without any turn or click.
   writeAgent(threadDir, "second", {

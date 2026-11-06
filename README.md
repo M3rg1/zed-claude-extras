@@ -208,10 +208,13 @@ covers the main conversation only, not subagents.
 ## Agent map
 
 Once a thread has spawned Claude subagents, the row gains an item such as
-`5 agents · 1 running`. Click it for a list, running ones first and then newest first:
+`5 agents · 1 running`. Click it for a list, running ones first and then newest first,
+with each subagent's own subagents indented under it, at any depth:
 
 ```
 ● Implement Task 6 · 15m · 225k
+└ ● Summarize the… · 1m · 31k
+ └ ○ Read AGENTS.md · 4s · 28k
 ○ Re-review round 1 · 3m · 132k
 ○ Fix round 1 · 4m · 298k
 ```
@@ -219,12 +222,13 @@ Once a thread has spawned Claude subagents, the row gains an item such as
 `●` is running, `○` is done, and `◌` means an unfinished subagent's log hasn't moved
 for over 30 minutes, so it was interrupted or is waiting on something long. Each row
 has its time so far and the size of its last reply, rounded and with long titles
-cut so they fit Zed's dropdown. Hover for the full title, exact figures and type; pick one to open a readable copy of its log in Zed, with long tool results cut.
+cut so they fit Zed's dropdown; the indent comes out of the title, so a row only
+runs past the dropdown's edge several levels deep. Hover for the full title, exact figures and type; pick one to open a readable copy of its log in Zed, with long tool results cut.
 That copy goes in the temp folder below and holds whatever the subagent read.
 
 It's read from the logs Claude Code writes, every 15 seconds while a thread is in
-use, so it costs no quota. Zed draws only a flat list here, not a tree. Claude Code
-only, as other agents have no such logs.
+use, so it costs no quota. Zed draws only a flat list here, so the indent stands in
+for a tree. Claude Code only, as other agents have no such logs.
 
 ## Telling threads apart
 

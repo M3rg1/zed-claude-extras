@@ -102,6 +102,18 @@ assert.equal(byId.bare.description, "bare", "with no metadata, the id still name
 assert.equal(byId.bare.tokens, 0);
 
 assert.deepEqual(await reader.read(path.join(scratch, "nowhere"), NOW), [], "no folder yet means no agents");
+assert.equal(byId.done.parentId, null, "started by the main agent");
+
+// A subagent's subagent names the one that started it.
+const nestedDir = path.join(scratch, "nested");
+writeAgent(nestedDir, "outer", { meta: { description: "Outer", spawnDepth: 1, finished: true }, lines: reviewLines });
+writeAgent(nestedDir, "inner", {
+  meta: { description: "Inner", parentAgentId: "outer", spawnDepth: 2, finished: true },
+  lines: reviewLines,
+});
+const nested = Object.fromEntries((await new AgentLogReader().read(nestedDir, NOW)).map((a) => [a.id, a]));
+assert.equal(nested.inner.parentId, "outer");
+assert.equal(nested.outer.parentId, null);
 
 // A log that changes is read again; one that doesn't isn't, so a long thread's
 // finished agents cost a stat rather than a parse on every refresh.
@@ -153,6 +165,66 @@ const biggest = agentMapOption([
 assert.equal(biggest.name, "○ Implement Task 13… · 108m · 252k");
 assert.match(biggest.description, /108m 53s · 252\.2k tokens/);
 assert.ok(Array.from(biggest.name).length <= 34, `too wide for Zed: ${biggest.name}`);
+
+// ---------------------------------------------------------------- nesting
+
+/** An agent with no figures, so a row is just its mark, indent and title. */
+const bareAgent = (id, status, parentId = null) => ({
+  id,
+  description: id,
+  type: null,
+  model: null,
+  status,
+  startedAt: 0,
+  seconds: 0,
+  tokens: 0,
+  parentId,
+});
+
+// In the reader's order, running first and then newest first, which the tree keeps
+// among siblings.
+const tree = agentMapOption([
+  bareAgent("Child A2", "running", "a"),
+  { ...bareAgent("Root A", "running"), id: "a" },
+  { ...bareAgent("Child A1", "done", "a"), id: "a1" },
+  { ...bareAgent("Grandchild", "done", "a1"), id: "a1x" },
+  { ...bareAgent("Great-grandchild", "done", "a1x"), id: "a1xy" },
+  bareAgent("Root B", "done"),
+  bareAgent("Orphan", "done", "not-listed"),
+]);
+assert.deepEqual(
+  tree.options.slice(1).map((o) => o.name),
+  [
+    "● Root A",
+    "└ ● Child A2",
+    "└ ○ Child A1",
+    " └ ○ Grandchild",
+    "  └ ○ Great-grandchild",
+    "○ Root B",
+    "○ Orphan",
+  ],
+  "each subagent under the one that started it, at any depth; one whose parent is gone at the top",
+);
+assert.equal(tree.options[0].name, "7 agents · 2 running", "the count includes nested ones");
+
+// Logs that point at each other can't come from Claude Code, but mustn't lose a row.
+const looped = agentMapOption([bareAgent("x", "done", "y"), bareAgent("y", "done", "x")]);
+assert.deepEqual(
+  looped.options.slice(1).map((o) => o.name),
+  ["○ x", "└ ○ y"],
+);
+
+// Zed's font is proportional, so a level is an em space, which plain spaces would
+// barely show. The indent comes out of the title, so a nested row still fits.
+const deepBiggest = agentMapOption([
+  { ...byId.done, id: "p", parentId: null },
+  { ...byId.done, id: "c", parentId: "p" },
+  { ...byId.done, id: "g", parentId: "c" },
+  { ...byId.done, id: "d", parentId: "g", description: "Implement Task 13: A mutation run", seconds: 6533, tokens: 252_200 },
+]).options[4];
+assert.equal(deepBiggest.name, "  └ ○ Implement T… · 108m · 252k");
+const emSpaces = (deepBiggest.name.match(/ /g) ?? []).length;
+assert.ok(Array.from(deepBiggest.name).length + emSpaces <= 34, `too wide for Zed: ${deepBiggest.name}`);
 
 // ---------------------------------------------------------------- the log view
 

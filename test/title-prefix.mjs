@@ -6,12 +6,11 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { testEnv } from "./launch.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SESSION = "sess_test_1";
 const PREFIX = "🔑";
-// A test run from a thread inherits that agent's own prefix; "unset" must mean it.
-const { ZED_AGENT_USAGE_TITLE_PREFIX: _inherited, ...baseEnv } = process.env;
 
 /** Updates for the adapter to emit; `_meta.case` names each in the output. */
 const CASES = [
@@ -29,7 +28,7 @@ function run(extraEnv) {
     const child = spawn(process.execPath, [path.join(here, "..", "proxy.mjs")], {
       stdio: ["pipe", "pipe", "inherit"],
       env: {
-        ...baseEnv,
+        ...testEnv(),
         ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
         ZED_AGENT_USAGE_CACHE: "off",
         ZED_AGENT_USAGE_LAST_ACTIVITY: "off",

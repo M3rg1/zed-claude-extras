@@ -9,10 +9,6 @@ ACP proxy that adds to Claude threads in Zed's agent panel:
 - **Hidden subagent work**: subagents' tool calls kept out of the thread.
 - **Title prefix**: a per-agent prefix on thread titles.
 
-```
-Bypass Permissions   Opus (1M context)   Xhigh   Usage · 42m   28 Aug, 11:39
-```
-
 ## Setup
 
 No dependencies; reuses the Claude adapter and node Zed has downloaded.
@@ -34,7 +30,7 @@ changing settings or updating this repo.
 ## How it works
 
 ```
-Zed  <--stdio-->  proxy.mjs  <--stdio-->  <agent>-acp adapter
+Zed  <--stdio-->  proxy.mjs  <--stdio-->  claude-acp adapter
 ```
 
 Zed extensions have no UI. The proxy appends its own entries (`_usage`,
@@ -96,8 +92,9 @@ age. Survives a reopen.
 
 ## Hiding selectors
 
-`ZED_AGENT_USAGE_HIDE=mode,fast` drops the agent's own selectors from the row. Ids:
-`mode`, `model`, `effort`, `fast`. `ZED_AGENT_USAGE_DEBUG=1` logs them
+`ZED_AGENT_USAGE_HIDE=agent,fast` drops the adapter's own selectors from the row.
+Ids as of `claude-acp` 0.101: `mode`, `agent`, `model`, `effort`, `ultracode`,
+`fast`. `ZED_AGENT_USAGE_DEBUG=1` logs them
 (`config options:` in `dev: open acp logs`). A hidden selector can't be changed from
 the panel: pin it in `default_config_options` first.
 
@@ -223,7 +220,6 @@ npm run test:real         # against the real adapter, handshake only
 
 ## Notes
 
-- Zed has no icon option for custom agents; use a [title prefix](#title-prefix).
 - Zed receives `_meta["_claude/rateLimit"]` from the Claude adapter but ignores it,
   and it has no percentage below a warning threshold.
 - `~/.claude/projects/*.jsonl` has token counts, not plan-limit percentages.

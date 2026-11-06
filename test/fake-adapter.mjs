@@ -137,6 +137,15 @@ process.stdin.on("data", (chunk) => {
         ...fromSubagent,
       });
       send({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
+      // A turn Claude starts itself once a background command finishes: the command's
+      // own call reports its exit, then the reply, then the result with its cost.
+      if (process.env.ZED_AGENT_USAGE_FAKE_WAKE === "1") {
+        setTimeout(() => {
+          finish(1, "completed");
+          toolUpdate({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "woke" } });
+          toolUpdate({ sessionUpdate: "usage_update", used: 2, size: 3, cost: { amount: 0.01, currency: "USD" } });
+        }, 100);
+      }
       continue;
     }
 

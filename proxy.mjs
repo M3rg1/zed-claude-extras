@@ -468,6 +468,10 @@ function transform(message) {
   // Before the summary card, so a subagent's work neither shows nor splits it.
   if (SUBAGENT_FILTER?.hides(update)) return null;
 
+  // A turn Claude starts itself, with no prompt, gets its first line before its output.
+  const ownTurnStart = TURN_TIMES?.observe(sessionId, update, Date.now());
+  if (ownTurnStart) send({ jsonrpc: "2.0", method: "session/update", params: ownTurnStart });
+
   // Only session/update is rewritten: session/request_permission keeps the whole
   // command, so what the user approves is never cut short.
   if (COMMAND_SUMMARY?.endsCard(update)) finishCommandCard(sessionId);
@@ -505,6 +509,12 @@ function transform(message) {
   if (update.sessionUpdate === "usage_update") {
     lastTurnAt = Date.now();
     void refreshUsage({ reason: "turn end" });
+    // A turn Claude started itself ends with its result, after its summary card.
+    const ownTurnEnd = TURN_TIMES?.turnResult(sessionId, update, Date.now());
+    if (ownTurnEnd) {
+      finishCommandCard(sessionId);
+      send({ jsonrpc: "2.0", method: "session/update", params: ownTurnEnd });
+    }
   }
 
   return message;
@@ -523,6 +533,10 @@ function interceptFromClient(message) {
   if (message?.method === "session/prompt" || message?.method === "session/load") {
     finishCommandCard(message.params?.sessionId);
     turnRequests.set(message.id, message.params?.sessionId);
+  }
+  // A reopened thread's replayed history is no turn of Claude's own.
+  if (message?.method === "session/load" && message.id !== undefined && message.params?.sessionId) {
+    TURN_TIMES?.replay(message.id, message.params.sessionId);
   }
   if (message?.method === "session/prompt") {
     if (message.id !== undefined && message.params?.sessionId) {

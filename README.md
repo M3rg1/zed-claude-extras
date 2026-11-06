@@ -124,8 +124,11 @@ Done 23:47 · 6m 12s
 Lines of text rather than cards, since Zed draws every card with an icon; copying a
 reply copies them too. The end line says `Stopped` for a cancelled turn, `Failed` for
 an error, and `Ended (<reason>)` for any other stop reason. Display only: Claude never
-sees them. Only turns you start get them: a turn Claude starts itself, e.g. when a
-background task wakes it, has none, and neither do a reopened thread's earlier turns.
+sees them.
+
+A turn Claude starts itself, e.g. when a background task wakes it, starts with `Woke`
+instead, at its first output, and ends with `Done` at its result: the one
+`usage_update` of a turn with a `cost`. A reopened thread's earlier turns have none.
 `ZED_AGENT_USAGE_TURN_TIMES=off` removes them.
 
 ## Hidden subagent work

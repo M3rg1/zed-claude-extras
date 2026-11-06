@@ -35,8 +35,9 @@ assert.ok(third, "released, so the next caller wins");
 third();
 // A holder that dies mid-fetch must not block everyone forever.
 assert.ok(acquireFetchLock(lockId), "acquired for the staleness check");
-assert.ok(acquireFetchLock(lockId, -1), "a stale lock is taken over");
-acquireFetchLock(lockId, -1)?.();
+// Far below zero, as a new file's time can run ahead of the clock on Windows.
+assert.ok(acquireFetchLock(lockId, -60_000), "a stale lock is taken over");
+acquireFetchLock(lockId, -60_000)?.();
 
 // A loser gets whatever the winner published.
 writeCache(lockId, { fetchedAt: Date.now(), usage: { available: true, windows: [] } });

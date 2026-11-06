@@ -3,7 +3,6 @@
 ACP proxy that adds to Claude threads in Zed's agent panel:
 
 - **Usage**: plan limits with reset countdowns, and the prompt cache's time left.
-- **Last activity**: when the thread was last worked in, as a date and time.
 - **Agent map**: the thread's subagents as a tree; each opens its log.
 - **Command card**: one card per run of shell commands and lookups.
 - **Hidden subagent work**: subagents' tool calls kept out of the thread.
@@ -33,10 +32,10 @@ changing settings or updating this repo.
 Zed  <--stdio-->  proxy.mjs  <--stdio-->  claude-acp adapter
 ```
 
-Zed extensions have no UI. The proxy appends its own entries (`_usage`,
-`_lastActivity`, `_agentMap`; ACP reserves the `_` prefix) to the session's config
-options, which Zed renders as selectors, answers `session/set_config_option` for
-them itself, and passes everything else through.
+Zed extensions have no UI. The proxy appends its own entries (`_usage`, `_agentMap`;
+ACP reserves the `_` prefix) to the session's config options, which Zed renders as
+selectors, answers `session/set_config_option` for them itself, and passes
+everything else through.
 
 Usage fetches (settings named without their `ZED_AGENT_USAGE_` prefix):
 
@@ -84,13 +83,6 @@ turn; for a reopened thread, from its transcript, and without one nothing until 
 next turn. TTL: 1 hour on a subscription, 5 minutes with `ANTHROPIC_API_KEY`, or
 `CLAUDE_CODE_PROMPT_CACHE_TTL`. Ignores the `promptCacheTtl` setting, compaction and
 early eviction; main conversation only.
-
-## Last activity
-
-An item after Usage showing when the thread was last worked in, as `06 Nov, 23:28`
-in the system's locale; Zed's thread list shows only a relative age (`9m`). Taken
-from the turns the proxy relays and the `updatedAt` of Zed's thread list, so a
-reopened thread has it. `ZED_AGENT_USAGE_LAST_ACTIVITY=off` removes it.
 
 ## Hiding selectors
 
@@ -178,7 +170,6 @@ Set in the agent entry's `env` block in `settings.json`.
 | `ZED_AGENT_USAGE_STALE_AFTER` | `2` | Failed reads in a row before the label shows `?` |
 | `ZED_AGENT_USAGE_IDLE_AFTER_MS` | `600000` | No turns for this long: stop refreshing |
 | `ZED_AGENT_USAGE_HIDE` | – | Config-option ids to hide from the row |
-| `ZED_AGENT_USAGE_LAST_ACTIVITY` | on | `off` removes the last-activity item |
 | `ZED_AGENT_USAGE_PROMPT_CACHE` | on | `off` removes the prompt cache estimate |
 | `ZED_AGENT_USAGE_COMMAND_SUMMARY` | on | `off` gives each shell command and lookup its own card again |
 | `ZED_AGENT_USAGE_HIDE_SUBAGENTS` | on | `off` shows subagents' tool calls in the thread again |
@@ -186,7 +177,7 @@ Set in the agent entry's `env` block in `settings.json`.
 | `ZED_AGENT_USAGE_AGENT_MAP` | on | `off` removes the agent map |
 | `ZED_AGENT_USAGE_AGENT_MAP_MS` | `15000` | How often the agent map checks for changes |
 | `ZED_AGENT_USAGE_TITLE_PREFIX` | – | Text put in front of this agent's thread titles |
-| `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot, activity record and subagent log copies live |
+| `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot and subagent log copies live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
 | `ZED_AGENT_USAGE_NODE` | auto | Node the launcher uses |
 | `ZED_AGENT_USAGE_ADAPTER_COMMAND` / `_ARGS` | auto | Override the wrapped adapter |
@@ -202,7 +193,7 @@ usage.mjs                     prints the usage snapshot
 bin/zed-claude-extras[.cmd]   what Zed spawns; finds node at run time
 providers/claude.mjs          the usage source and the Claude Code log paths
 lib/windows.mjs               countdown labelling
-lib/cache.mjs                 snapshot + activity record shared between proxies
+lib/cache.mjs                 the usage snapshot shared between proxies
 lib/commands.mjs              the summary card and shortened command labels
 lib/subagents.mjs             hiding subagents' work
 lib/prompt-cache.mjs          the prompt cache estimate

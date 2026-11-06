@@ -31,7 +31,6 @@ function run(extraEnv) {
         ...testEnv(),
         ZED_AGENT_USAGE_PROVIDER_PATH: path.join(here, "fake-provider.mjs"),
         ZED_AGENT_USAGE_CACHE: "off",
-        ZED_AGENT_USAGE_LAST_ACTIVITY: "off",
         ...extraEnv,
       },
     });

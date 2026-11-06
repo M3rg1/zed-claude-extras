@@ -100,6 +100,11 @@ const COMMAND_SUMMARY = off(process.env.ZED_AGENT_USAGE_COMMAND_SUMMARY ?? "on")
   ? null
   : new CommandSummary(COMMAND_MAX);
 
+/** Goes in front of every thread title. Zed gives all custom agents the same
+ *  generic icon and has no setting for it, so the title is the one place in the
+ *  sidebar that can say which agent entry a thread runs on. */
+const TITLE_PREFIX = (process.env.ZED_AGENT_USAGE_TITLE_PREFIX ?? "").trim();
+
 const log = (msg) => {
   if (DEBUG) process.stderr.write(`[agent-usage] ${msg}\n`);
 };
@@ -449,6 +454,12 @@ function finishCommandCard(sessionId) {
   if (update) send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
 }
 
+/** A title can already carry the prefix: Zed passes a title back to the agent,
+ *  and a reopened thread's stored title is published again. */
+function withTitlePrefix(title) {
+  return title.startsWith(`${TITLE_PREFIX} `) ? title : `${TITLE_PREFIX} ${title}`;
+}
+
 /** Inspect one agent -> client message, decorating the selector in place. Returns
  *  what to send on, or null for nothing. */
 function transform(message) {
@@ -521,6 +532,18 @@ function transform(message) {
         ...message.params,
         update: { ...update, configOptions: withOwnOptions(update.configOptions, sessionId) },
       },
+    };
+  }
+
+  // A null title clears it, and most of these updates carry no title at all.
+  if (
+    TITLE_PREFIX &&
+    update.sessionUpdate === "session_info_update" &&
+    typeof update.title === "string"
+  ) {
+    return {
+      ...message,
+      params: { ...message.params, update: { ...update, title: withTitlePrefix(update.title) } },
     };
   }
 

@@ -14,6 +14,12 @@ process.stdin.on("data", (chunk) => {
     if (!line.trim()) continue;
     const msg = JSON.parse(line);
 
+    // Lets a test choose exactly what the adapter reports.
+    if (msg.method === "test/emit_update") {
+      send({ jsonrpc: "2.0", method: "session/update", params: msg.params });
+      continue;
+    }
+
     if (msg.method === "initialize") {
       send({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: 1, agentCapabilities: {} } });
       continue;

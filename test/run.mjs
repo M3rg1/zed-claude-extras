@@ -71,6 +71,8 @@ const child = spawn(command, commandArgs, {
       ? { ZED_AGENT_USAGE_FAKE_FAIL: "after-first", ZED_AGENT_USAGE_STALE_AFTER: "1" }
       : {}),
     ...(hide ? { ZED_AGENT_USAGE_HIDE: "model" } : {}),
+    // A test run from a thread inherits that agent's own prefix.
+    ZED_AGENT_USAGE_TITLE_PREFIX: "",
     // Never share a snapshot with the developer's real proxies during a test.
     ZED_AGENT_USAGE_CACHE: "off",
   },
@@ -175,7 +177,7 @@ setTimeout(() => {
     console.error(`FAIL: set_config_option was not answered with the option set`);
     process.exit(1);
   }
-  // Titles are relayed verbatim now that the title surface is gone.
+  // Titles are relayed verbatim unless a prefix is set (test/title-prefix.mjs).
   if (titles.some((t) => t !== "Fix auth bug")) {
     console.error(`FAIL: title was modified: ${JSON.stringify(titles)}`);
     process.exit(1);

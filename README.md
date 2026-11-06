@@ -199,6 +199,29 @@ It's read from the logs Claude Code writes, every 15 seconds while a thread is i
 use, so it costs no quota. Zed draws only a flat list here, not a tree. Claude Code
 only, as other agents have no such logs.
 
+## Telling threads apart
+
+Zed gives all custom agents the same generic icon, and a running thread shows a
+spinner in its place, so the sidebar can't tell you which agent a thread runs on.
+A prefix for each agent's thread titles can:
+
+```json
+"Claude + API":   { "env": { "ZED_AGENT_USAGE_TITLE_PREFIX": "🔑" } },
+"Claude + usage": { "env": { "ZED_AGENT_USAGE_TITLE_PREFIX": "📊" } }
+```
+
+```
+🔑 Fix the login timeout
+📊 Plan the release
+```
+
+The prefix goes on the titles the agent sends, so:
+
+- A new thread shows Zed's unprefixed preview until its title arrives.
+- An older thread gets the prefix once it's reopened.
+- A thread you rename yourself keeps your title as you typed it, because Zed then
+  ignores the agent's titles.
+
 ## Config
 
 | Env var | Default | Purpose |
@@ -218,6 +241,7 @@ only, as other agents have no such logs.
 | `ZED_AGENT_USAGE_COMMAND_MAX` | `80` | Longest command text shown, in characters; `off` leaves individual cards in full |
 | `ZED_AGENT_USAGE_AGENT_MAP` | on | `off` removes the agent map |
 | `ZED_AGENT_USAGE_AGENT_MAP_MS` | `15000` | How often the agent map checks for changes |
+| `ZED_AGENT_USAGE_TITLE_PREFIX` | – | Text put in front of this agent's thread titles |
 | `ZED_AGENT_USAGE_CACHE_DIR` | temp dir | Where the shared snapshot, activity record and subagent log copies live |
 | `ZED_AGENT_USAGE_DEBUG` | – | `1` logs to stderr (`dev: open acp logs`) |
 | `ZED_AGENT_USAGE_PROVIDER` | `claude` | Provider, if `--provider` is not passed |
@@ -255,7 +279,8 @@ npm run test:real         # against the real adapter, handshake only
 ## Limitations
 
 - Zed has no icon option for custom agents, so proxied entries show a generic
-  icon rather than the Claude or OpenAI one.
+  icon rather than the Claude or OpenAI one. A
+  [title prefix](#telling-threads-apart) can tell them apart instead.
 - The proxy is long-lived: after updating this repo, restart the agent before
   changes appear.
 

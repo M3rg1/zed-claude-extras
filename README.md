@@ -148,11 +148,15 @@ want in `default_config_options` first.
 ## One card for shell commands
 
 Zed draws a card per shell command, each with the command in full, so a long turn
-fills the thread. The proxy shows one card per turn instead:
+fills the thread. The proxy shows one card for each unbroken run of commands instead:
 
 ```
 Ran 18 commands · last: sed -n 70,130p scripts/check-banned
 ```
+
+Zed can't move a card, so a message or another tool's card finishes the current one,
+and the next command starts a new one at the bottom. Claude's thoughts don't, since
+they fall between most commands.
 
 This changes the display only: the agent runs the real commands, and they stay in
 the agent's own logs. Failed commands are hidden like the others. A command awaiting

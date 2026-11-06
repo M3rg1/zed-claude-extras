@@ -45,7 +45,7 @@ function runPrompt(env) {
     },
   });
   const send = (m) => child.stdin.write(`${JSON.stringify(m)}\n`);
-  const seen = { updates: [], permission: null, rawInputs: [] };
+  const seen = { updates: [], stream: [], permission: null, rawInputs: [] };
   let sessionId;
 
   return new Promise((resolve, reject) => {
@@ -69,7 +69,11 @@ function runPrompt(env) {
           prompt(3, sessionId);
         }
         const update = msg.params?.update;
+        if (update?.sessionUpdate?.endsWith("_chunk") && update.content?.text === "words") {
+          seen.stream.push(update.sessionUpdate);
+        }
         if (update?.toolCallId) {
+          seen.stream.push(update);
           seen.updates.push(update);
           if (update.rawInput) seen.rawInputs.push(update.rawInput);
         }
@@ -91,24 +95,42 @@ const titleOf = (seen, toolCallId, sessionUpdate) =>
 
 const expected = shortenCommand(LONG, 30);
 
-// Summary on, the default: one card a turn stands in for the turn's commands.
+// Summary on, the default: a card stands in for each unbroken run of commands.
 const summary = await runPrompt({ ZED_AGENT_USAGE_COMMAND_MAX: "30" });
 const ids = (seen) => new Set(seen.updates.map((u) => u.toolCallId));
-for (const hidden of ["bash_1_1", "bash_2_1", "bash_1_2", "bash_2_2"]) {
-  assert.ok(!ids(summary).has(hidden), `${hidden} has no card, succeeded or failed`);
+for (const turn of [1, 2]) {
+  for (const n of [1, 2, 4, 5]) {
+    assert.ok(!ids(summary).has(`bash_${n}_${turn}`), "no card of its own, succeeded or failed");
+  }
 }
 const cardIds = [...ids(summary)].filter((id) => id.startsWith("_commands"));
-assert.equal(cardIds.length, 2, "one card a turn");
-for (const id of cardIds) {
+assert.equal(cardIds.length, 6, "three runs of commands in each of two turns");
+const cardsRan = [3, 1, 1, 3, 1, 1];
+cardIds.forEach((id, i) => {
   const card = summary.updates.filter((u) => u.toolCallId === id);
   assert.equal(card.filter((u) => u.sessionUpdate === "tool_call").length, 1, "created once");
   assert.equal(card[0].sessionUpdate, "tool_call", "created before it is updated");
   assert.equal(card[0].kind, "other", "not drawn as a terminal");
-  assert.equal(card[0].status, "in_progress", "running until the turn ends");
+  assert.equal(card[0].status, "in_progress", "running until something ends it");
   assert.equal(card[0].title, `Ran 1 command · last: ${expected}`);
-  assert.equal(card.at(-1).status, "completed", "closed when the turn ends");
-  assert.equal(card.at(-1).title, `Ran 3 commands · last: ${expected}`);
-}
+  assert.equal(card.at(-1).status, "completed", "closed when it is finished");
+  const noun = cardsRan[i] === 1 ? "command" : "commands";
+  assert.equal(card.at(-1).title, `Ran ${cardsRan[i]} ${noun} · last: ${expected}`);
+});
+
+// Order in the thread: each card is finished before whatever comes after it.
+const position = (match) => summary.stream.findIndex(match);
+const lastOf = (id) => summary.stream.findLastIndex((e) => e.toolCallId === id);
+const thought = position((e) => e === "agent_thought_chunk");
+const message = position((e) => e === "agent_message_chunk");
+const read = position((e) => e.toolCallId === "read_1");
+const approval = position((e) => e.toolCallId === "bash_3_1");
+assert.ok(lastOf(cardIds[0]) > thought, "a thought doesn't end a run of commands");
+assert.ok(lastOf(cardIds[0]) < message, "a message does");
+assert.ok(position((e) => e.toolCallId === cardIds[1]) > message, "the next command starts a card below it");
+assert.ok(lastOf(cardIds[1]) < read, "another tool ends a card too");
+assert.ok(position((e) => e.toolCallId === cardIds[2]) > read);
+assert.ok(lastOf(cardIds[2]) < approval, "and so does a command awaiting approval");
 
 assert.equal(titleOf(summary, "read_1", "tool_call"), `Read ${"long/".repeat(40)}`, "other tools");
 assert.equal(summary.permission.title, LONG, "approval prompts show the whole command");
@@ -135,4 +157,4 @@ const full = await runPrompt({
 });
 assert.equal(titleOf(full, "bash_1_1", "tool_call"), LONG, "both off keeps the whole command");
 
-console.log("PASS: commands collapse into one card a turn, in labels only");
+console.log("PASS: runs of commands collapse into one card each, in labels only");

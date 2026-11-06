@@ -385,7 +385,7 @@ function adopt(snapshot, note) {
 
 /** Tells Zed a session's summary card is done, if it has one open. */
 function finishCommandCard(sessionId) {
-  const update = COMMAND_SUMMARY?.finishTurn(sessionId);
+  const update = COMMAND_SUMMARY?.finishCard(sessionId);
   if (update) send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
 }
 
@@ -432,6 +432,7 @@ function transform(message) {
   }
 
   if (message?.method === "session/request_permission" && COMMAND_SUMMARY && message.params?.toolCall) {
+    finishCommandCard(message.params.sessionId);
     const toolCall = COMMAND_SUMMARY.approve(message.params.toolCall);
     return { ...message, params: { ...message.params, toolCall } };
   }
@@ -443,6 +444,7 @@ function transform(message) {
 
   // Only session/update is rewritten: session/request_permission keeps the whole
   // command, so what the user approves is never cut short.
+  if (COMMAND_SUMMARY?.endsCard(update)) finishCommandCard(sessionId);
   let shown = update;
   if (COMMAND_SUMMARY) shown = COMMAND_SUMMARY.filter(sessionId, update);
   else if (COMMAND_MAX !== null && update.kind === "execute") shown = shortenTitle(update, COMMAND_MAX);

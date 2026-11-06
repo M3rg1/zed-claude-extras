@@ -43,8 +43,17 @@ process.stdin.on("data", (chunk) => {
       const finish = (n, status) =>
         toolUpdate({ sessionUpdate: "tool_call_update", toolCallId: `bash_${n}_${turn}`, status });
 
+      const chunk = (sessionUpdate) =>
+        toolUpdate({ sessionUpdate, content: { type: "text", text: "words" } });
+
       report(1);
       finish(1, "completed");
+      report(4);
+      chunk("agent_thought_chunk");
+      report(5);
+      chunk("agent_message_chunk");
+      report(2);
+      finish(2, "failed");
       toolUpdate({
         sessionUpdate: "tool_call",
         toolCallId: `read_${turn}`,
@@ -52,8 +61,6 @@ process.stdin.on("data", (chunk) => {
         kind: "read",
         status: "pending",
       });
-      report(2);
-      finish(2, "failed");
       report(3);
       // No title or kind: Zed can't draw a card it hasn't seen without a title.
       send({
